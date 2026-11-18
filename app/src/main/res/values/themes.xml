@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Сайт только светлый, поэтому и приложение светлое при любой теме телефона -->
     <style name="Theme.CanastaCerca" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/canasta_background</item>
     </style>

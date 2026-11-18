@@ -1,17 +1,19 @@
 plugins {
-    alias(libs.plugins.canasta.android.application)
-    alias(libs.plugins.canasta.android.compose)
-    alias(libs.plugins.canasta.metro)
+    alias(libs.plugins.android.application)
 }
 
 android {
     namespace = "ar.canastacerca"
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "ar.canastacerca"
-        versionCode = 1
-        versionName = "0.1.0"
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
+        versionCode = 2
+        versionName = "0.2.0"
 
+        // Какой сайт открывать. Свой адрес и ключ из `npm run share` — в ~/.gradle/gradle.properties (см. README)
         val baseUrl = providers.gradleProperty("canasta.baseUrl").orElse("http://10.0.2.2:3000/").get()
         val accessKey = providers.gradleProperty("canasta.accessKey").orElse("").get()
         buildConfigField("String", "CANASTA_BASE_URL", "\"$baseUrl\"")
@@ -20,6 +22,11 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildTypes {
@@ -36,24 +43,6 @@ android {
 }
 
 dependencies {
-    // :app — единственное место, где собираются все impl-модули и строится граф Metro
-    implementation(projects.core.common)
-    implementation(projects.core.model)
-    implementation(projects.core.designsystem)
-    implementation(projects.core.navigation)
-    implementation(projects.core.network.impl)
-    implementation(projects.core.storage.impl)
-
-    implementation(projects.feature.offers.impl)
-    implementation(projects.feature.catalog.impl)
-    implementation(projects.feature.recipes.impl)
-    implementation(projects.feature.basket.impl)
-    implementation(projects.feature.location.impl)
-    implementation(projects.feature.payments.impl)
-
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.navigation3.ui)
-    implementation(libs.metrox.android)
-    implementation(libs.metrox.viewmodel.compose)
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.core.ktx)
 }

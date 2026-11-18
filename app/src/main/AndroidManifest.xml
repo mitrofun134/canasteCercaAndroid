@@ -2,13 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Сканер штрихкода на сайте -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- «Mi ubicación» на сайте -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!--
-        android:appComponentFactory задаёт metrox-android (MetroAppComponentFactory):
-        Activity создаётся графом Metro, поэтому у MainActivity конструктор с зависимостями.
-    -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
-        android:name=".CanastaApplication"
         android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
@@ -18,8 +20,10 @@
         android:theme="@style/Theme.CanastaCerca"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
 
+        <!-- Поворот и смена размера не пересоздают экран: сайт не перезагружается -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

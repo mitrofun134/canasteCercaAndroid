@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Цвета сайта (public/style.css, :root) -->
     <color name="canasta_background">#FFF4F7FB</color>
+    <color name="canasta_ink">#FF142235</color>
+    <color name="canasta_muted">#FF5B6B80</color>
+    <color name="canasta_celeste">#FF0B5CAD</color>
     <color name="ic_launcher_background">#FFF6B40E</color>
 </resources>
