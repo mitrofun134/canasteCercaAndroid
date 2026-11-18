@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="payments_title">Способы оплаты</string>
+    <string name="payments_done">Готово</string>
+    <string name="payments_intro">Отметьте, чем вы платите: посчитаем проверенные скидки банков и кошельков для вашей корзины — сегодня и в лучший день недели.</string>
+    <string name="payments_group_wallet">Кошельки</string>
+    <string name="payments_group_bank">Банки (через MODO)</string>
+    <string name="payments_group_card">Карты</string>
+    <string name="payments_group_store">Карты и счета магазинов</string>
+    <string name="payments_group_other">Другое</string>
+    <string name="payments_empty">Проверенных скидок пока нет. Попробуйте через несколько минут.</string>
+    <string name="payments_clear">Снять все</string>
+</resources>

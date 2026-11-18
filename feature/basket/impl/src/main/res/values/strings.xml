@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="basket_tab">Canasta</string>
+    <string name="basket_title">Tu canasta</string>
+    <string name="basket_empty_title">Tu canasta está vacía</string>
+    <string name="basket_empty_message">Agregá productos desde el catálogo, las ofertas o una receta y te decimos dónde sale más barata.</string>
+    <string name="basket_go_catalog">Ir al catálogo</string>
+    <string name="basket_products">Productos (%1$d)</string>
+    <string name="basket_clear">Vaciar</string>
+    <string name="basket_remove">Quitar</string>
+    <string name="basket_radius">Hasta %1$s</string>
+    <string name="basket_payments_none">Medios de pago</string>
+    <string name="basket_payments_n">%1$d medios de pago</string>
+    <string name="basket_need_address">Elegí tu dirección para comparar la canasta en los súper cercanos.</string>
+    <string name="basket_pick_address">Elegir dirección</string>
+    <string name="basket_comparing">Comparando precios en los súper cercanos…</string>
+    <string name="basket_best_title">Lo más barato, todo en un lugar</string>
+    <string name="basket_best_partial">Donde más productos encontramos</string>
+    <string name="basket_found">%1$d de %2$d productos</string>
+    <string name="basket_store_offers_saving">Con ofertas del súper ahorrás %1$s</string>
+    <string name="basket_pay_today">Hoy con tus medios de pago: %1$s</string>
+    <string name="basket_pay_best">Mejor día (%1$s): %2$s</string>
+    <string name="basket_pay_hint">Elegí tus medios de pago para ver los descuentos de bancos y billeteras.</string>
+    <string name="basket_spread">Entre el más caro y el más barato hay %1$s (%2$s).</string>
+    <string name="basket_pair_title">Dividir la compra en dos súper</string>
+    <string name="basket_pair_saving">%1$s · ahorrás %2$s</string>
+    <string name="basket_pair_covers_more">%1$s · encontrás más productos</string>
+    <string name="basket_stores_title">Cuánto sale en cada súper</string>
+    <string name="basket_missing">Faltan %1$d</string>
+    <string name="basket_online">online</string>
+    <string name="basket_unavailable">No encontramos cerca: %1$s</string>
+    <string name="basket_pending">Todavía cargando precios de: %1$s</string>
+    <string name="basket_online_prices">Precios Claros no respondió: usamos los precios de las webs de las cadenas.</string>
+    <string name="basket_full">La canasta está llena (máximo %1$d productos).</string>
+</resources>

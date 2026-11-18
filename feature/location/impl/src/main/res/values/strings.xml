@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="location_title">Tu dirección</string>
+    <string name="location_hint">Calle y altura, por ejemplo: Av. Corrientes 1234</string>
+    <string name="location_zone_both">CABA y GBA</string>
+    <string name="location_zone_caba">CABA</string>
+    <string name="location_zone_gba">GBA</string>
+    <string name="location_min_chars">Escribí al menos 3 letras.</string>
+    <string name="location_no_results">No encontramos esa dirección. Probá con calle y altura.</string>
+    <string name="location_current">Ahora: %1$s</string>
+    <string name="location_saved">Dirección guardada</string>
+</resources>
