@@ -1,14 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Сверху — полоса под строкой состояния в цвет шапки сайта (.appbar), снизу — белая под панелью навигации,
+    как нижнее меню сайта. Высоту полос и отступы content задаёт MainActivity по размерам системных панелей.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/canasta_background">
+    android:background="@color/canasta_card">
+
+    <View
+        android:id="@+id/status_bg"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/canasta_celeste" />
+
+    <FrameLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
     <WebView
         android:id="@+id/web"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- Пока сайт не нарисовал первый кадр: Firu вместо белого экрана -->
+    <FrameLayout
+        android:id="@+id/loading"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/canasta_background">
+
+        <ImageView
+            android:layout_width="160dp"
+            android:layout_height="160dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_launcher_foreground" />
+    </FrameLayout>
 
     <ProgressBar
         android:id="@+id/progress"
@@ -109,4 +139,5 @@
                 android:textSize="12sp" />
         </LinearLayout>
     </ScrollView>
+    </FrameLayout>
 </FrameLayout>

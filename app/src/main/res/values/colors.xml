@@ -5,5 +5,7 @@
     <color name="canasta_ink">#FF142235</color>
     <color name="canasta_muted">#FF5B6B80</color>
     <color name="canasta_celeste">#FF0B5CAD</color>
+    <!-- Нижнее меню сайта на телефоне (.tabbar) -->
+    <color name="canasta_card">#FFFFFFFF</color>
     <color name="ic_launcher_background">#FFF6B40E</color>
 </resources>

@@ -2,6 +2,11 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+// Всё личное — в ~/.gradle/gradle.properties, не в проекте: репозиторий публичный (README → «Сборка для Google Play»)
+val siteUrl = providers.gradleProperty("canasta.baseUrl")
+val accessKey = providers.gradleProperty("canasta.accessKey").orElse("").get()
+val uploadStore = providers.gradleProperty("canasta.upload.storeFile").orNull
+
 android {
     namespace = "ar.canastacerca"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -10,13 +15,10 @@ android {
         applicationId = "ar.canastacerca"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
-        // Какой сайт открывать. Свой адрес и ключ из `npm run share` — в ~/.gradle/gradle.properties (см. README)
-        val baseUrl = providers.gradleProperty("canasta.baseUrl").orElse("http://10.0.2.2:3000/").get()
-        val accessKey = providers.gradleProperty("canasta.accessKey").orElse("").get()
-        buildConfigField("String", "CANASTA_BASE_URL", "\"$baseUrl\"")
+        // Ключ доступа: пока сайт закрыт (B80), сборки для тестеров и для проверки Google несут ключ
         buildConfigField("String", "CANASTA_ACCESS_KEY", "\"$accessKey\"")
     }
 
@@ -29,15 +31,29 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    signingConfigs {
+        // Ключ загрузки в Google Play. Без него релиз подписывается отладочным ключом: ставится на телефон, но Play не примет
+        if (uploadStore != null) {
+            create("upload") {
+                storeFile = file(uploadStore)
+                storePassword = providers.gradleProperty("canasta.upload.storePassword").get()
+                keyAlias = providers.gradleProperty("canasta.upload.keyAlias").get()
+                keyPassword = providers.gradleProperty("canasta.upload.keyPassword").get()
+            }
+        }
+    }
+
     buildTypes {
         debug {
-            // Локальный сервер (npm run dev) отвечает по http
+            // Локальный сервер (npm run dev): эмулятор видит компьютер как 10.0.2.2, отвечает он по http
+            buildConfigField("String", "CANASTA_BASE_URL", "\"${siteUrl.orElse("http://10.0.2.2:3000/").get()}\"")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
         release {
-            isMinifyEnabled = false
+            buildConfigField("String", "CANASTA_BASE_URL", "\"${siteUrl.orElse("https://canastacerca.com/").get()}\"")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName(if (uploadStore != null) "upload" else "debug")
         }
     }
 }
@@ -45,4 +61,5 @@ android {
 dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.webkit)
 }
