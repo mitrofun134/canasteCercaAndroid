@@ -76,7 +76,7 @@
    ```
    cd ~/StudioProjects/canasta-cerca-android && JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew bundleRelease
    ```
-   Файл — `app/build/outputs/bundle/release/app-release.aab`. В Play Console: «Внутреннее тестирование» → новый выпуск →
+   Файл — `app/build/outputs/bundle/release/app-release.aab`. Пакет в Play — `ar.canastacerca.app` (`ar.canastacerca` занят). В Play Console: «Внутреннее тестирование» → новый выпуск →
    загрузить AAB (подпись приложения — Google, ключ загрузки — ваш). Каждая новая загрузка — `versionCode` на 1 больше
    (`app/build.gradle.kts`).
 
