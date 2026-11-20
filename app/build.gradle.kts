@@ -12,9 +12,7 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        // В Play пакет ar.canastacerca оказался занят (21.11) — в магазине приложение ar.canastacerca.app.
-        // namespace (класс R, код) остаётся ar.canastacerca
-        applicationId = "ar.canastacerca.app"
+        applicationId = "ar.canastacerca"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 4
