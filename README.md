@@ -89,6 +89,9 @@
   в демо-режиме в Chrome с экраном телефона и без `navigator.share`, как в WebView. 15 проверок: `appInfo()`,
   `X-CC-Client`, `pl: 'android'`, «Compartir» текстом и картинкой, «назад» закрывает панель, `window.open` → WhatsApp,
   ширина страниц 390 px, ошибки JS. Запуск — в шапке файла.
+- **Пробная сборка с сайтом с этого Mac** (то, что ещё не выложено) — двойной клик по `tools/test-build.command`:
+  туннель Cloudflare из папки сайта (`scripts/share.js`), APK на эту ссылку, `canasta-test.apk` в Finder. Ставится
+  поверх приложения из Play; работает, пока окно открыто. В Play не загружать.
 - **На телефоне** (QA, `docs/specs/mobile.md` §6): первый запуск — Firu, потом сайт; строка состояния синяя;
   «назад» закрывает панели; «Escanear» — камера; «Mi ubicación»; «Compartir canasta» и «Compartir mi ahorro» — меню
   телефона; «Cómo llegar» — Карты; в режиме полёта — экран с Firu и «Reintentar».
