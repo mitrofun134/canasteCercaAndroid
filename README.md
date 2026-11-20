@@ -35,8 +35,8 @@
   потом листает историю сайта, с первой страницы — выход.
 - **Мост `window.CanastaApp`** (`docs/specs/mobile.md` §3.2 в веб-проекте) — только на страницах нашего сайта
   (`WebViewCompat.addWebMessageListener` и `addDocumentStartJavaScript` с правилом по адресу):
-  - `info()` → `{"platform":"android","version":"0.3.0+3","push":"off"}`: сайт знает, что он в приложении, — события
-    идут с `pl: 'android'`, запросы — с `X-CC-Client: android/0.3.0+3 web/…`;
+  - `info()` → `{"platform":"android","version":"0.3.1+4","push":"off"}`: сайт знает, что он в приложении, — события
+    идут с `pl: 'android'`, запросы — с `X-CC-Client: android/0.3.1+4 web/…`;
   - `share({text, url, image})` → системное меню «Поделиться», картинка «Compartir mi ahorro» уходит картинкой
     (файл в кэше, `FileProvider`). Ответ сайту — событием `canastaapp`.
   - `pushAsk`, `scan`, `openSettings` — в следующих версиях; без них сайт работает как в браузере. На старом WebView

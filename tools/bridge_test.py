@@ -24,7 +24,7 @@ src = open(KT, encoding='utf-8').read()
 # --- JS из Kotlin ---
 raw = re.search(r'return """\n(.*?)""".trimIndent\(\)', src, re.S).group(1)
 raw = textwrap.dedent(raw).strip('\n')
-version_name, version_code = '0.3.0', '3'
+version_name, version_code = '0.3.1', '4'
 info = json.dumps({'platform': 'android', 'version': f'{version_name}+{version_code}', 'push': 'off'}, separators=(',', ':'))
 native = re.search(r'const val NATIVE = "(\w+)"', src).group(1)
 bridge_js = raw.replace('${JSONObject.quote(info)}', json.dumps(info)).replace('$NATIVE', native)
@@ -53,7 +53,7 @@ window.%s = {
 """ % native
 
 UA = ('Mozilla/5.0 (Linux; Android 14; Pixel 7; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 '
-      'Chrome/153.0.0.0 Mobile Safari/537.36 CanastaCercaAndroid/0.3.0')
+      f'Chrome/153.0.0.0 Mobile Safari/537.36 CanastaCercaAndroid/{version_name}')
 
 results = []
 
@@ -90,10 +90,10 @@ with sync_playwright() as p:
     page.wait_for_timeout(1500)
 
     a = page.evaluate('appInfo()')
-    check('сайт видит приложение: appInfo()', a and a.get('platform') == 'android' and a.get('version') == '0.3.0+3', json.dumps(a))
+    check('сайт видит приложение: appInfo()', a and a.get('platform') == 'android' and a.get('version') == f'{version_name}+{version_code}', json.dumps(a))
     check('inApp() === true', page.evaluate('inApp()'))
     tags = [t for t in api_tags if t]
-    check('X-CC-Client в запросах /api — android/0.3.0+3 web/…', tags and all(t.startswith('android/0.3.0+3 web/') for t in tags),
+    check(f'X-CC-Client в запросах /api — android/{version_name}+{version_code} web/…', tags and all(t.startswith(f'android/{version_name}+{version_code} web/') for t in tags),
           f'{len(tags)} запросов, пример: {tags[0] if tags else None}')
     check('navigator.share подменён мостом (appShareInstall)', page.evaluate('navigator.__ccAppShare === true'))
 

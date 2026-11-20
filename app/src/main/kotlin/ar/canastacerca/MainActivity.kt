@@ -151,6 +151,10 @@ class MainActivity : ComponentActivity() {
             domStorageEnabled = true // корзина, адрес, способы оплаты, покупки — в localStorage
             mediaPlaybackRequiresUserGesture = false // видео с камеры в сканере штрихкода
             setGeolocationEnabled(true)
+            // «Размер шрифта» из настроек телефона WebView умножает только на текст, а карточки и кнопки сайта заданы
+            // в px: при крупном шрифте текст распирает блоки и на экран влезает мало. Сайт — в своём размере, как в
+            // браузере; крупный шрифт для тех, кому он нужен, — со стороны сайта (W138)
+            textZoom = 100
             // Чтобы сервер отличал приложение от браузера; сайт узнаёт себя в приложении по CanastaApp.info()
             userAgentString = "$userAgentString CanastaCercaAndroid/${BuildConfig.VERSION_NAME}"
         }
