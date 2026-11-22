@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Canasta Cerca</string>
+    <!-- Под значком: полное имя не влезает -->
+    <string name="launcher_name" translatable="false">Canasta</string>
     <string name="error_title">No pudimos abrir Canasta Cerca</string>
-    <string name="error_hint">Revisá la conexión a internet y probá de nuevo. Si te pasaron un enlace nuevo, pegalo abajo.</string>
+    <string name="error_hint">Revisá la conexión a internet y probá de nuevo.</string>
+    <!-- Отладочная сборка: под текстом — поле для новой ссылки на сервер -->
+    <string name="error_hint_debug">Revisá la conexión a internet y probá de nuevo. Si te pasaron un enlace nuevo, pegalo abajo.</string>
     <string name="error_detail">Servidor: %1$s\n%2$s</string>
     <string name="retry">Reintentar</string>
     <string name="server_label">Enlace del servidor</string>
@@ -10,4 +14,8 @@
     <string name="open_server">Abrir este enlace</string>
     <string name="server_bad">El enlace tiene que empezar con http:// o https://</string>
     <string name="no_app">No hay ninguna app para abrir este enlace</string>
+    <!-- Версия ниже minVersion из /api/config (docs/specs/mobile.md §3.6) -->
+    <string name="update_title">Actualizá la app</string>
+    <string name="update_hint">Hay una versión nueva de Canasta Cerca. Para seguir comparando precios, actualizala en Google Play.</string>
+    <string name="update_button">Actualizar</string>
 </resources>

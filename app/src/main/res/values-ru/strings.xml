@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="error_title">Не удалось открыть Canasta Cerca</string>
-    <string name="error_hint">Проверьте интернет и попробуйте ещё раз. Если вам прислали новую ссылку, вставьте её ниже.</string>
+    <string name="error_hint">Проверьте интернет и попробуйте ещё раз.</string>
+    <string name="error_hint_debug">Проверьте интернет и попробуйте ещё раз. Если вам прислали новую ссылку, вставьте её ниже.</string>
     <string name="error_detail">Сервер: %1$s\n%2$s</string>
     <string name="retry">Повторить</string>
     <string name="server_label">Ссылка на сервер</string>
     <string name="open_server">Открыть эту ссылку</string>
     <string name="server_bad">Ссылка должна начинаться с http:// или https://</string>
     <string name="no_app">Нет приложения, чтобы открыть эту ссылку</string>
+    <string name="update_title">Обновите приложение</string>
+    <string name="update_hint">Вышла новая версия Canasta Cerca. Чтобы и дальше сравнивать цены, обновите её в Google Play.</string>
+    <string name="update_button">Обновить</string>
 </resources>

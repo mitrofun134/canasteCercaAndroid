@@ -20,10 +20,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-    <WebView
-        android:id="@+id/web"
+    <!-- «Потянуть вниз — обновить» (SitePull.kt): только когда сайт в самом верху и палец не в карусели, панели, карте -->
+    <ar.canastacerca.SitePull
+        android:id="@+id/pull"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent">
+
+        <WebView
+            android:id="@+id/web"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </ar.canastacerca.SitePull>
 
     <!-- Пока сайт не нарисовал первый кадр: Firu вместо белого экрана -->
     <FrameLayout
@@ -86,6 +93,7 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/error_hint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -101,10 +109,13 @@
                 android:layout_marginTop="20dp"
                 android:text="@string/retry" />
 
+            <!-- Поле для другой ссылки на сервер — только в отладочной сборке (MainActivity.setUpErrorPanel, T4) -->
             <TextView
+                android:id="@+id/server_label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
+                android:visibility="gone"
                 android:text="@string/server_label"
                 android:textColor="@color/canasta_ink"
                 android:textSize="14sp"
@@ -120,14 +131,16 @@
                 android:inputType="textUri"
                 android:maxLines="1"
                 android:textColor="@color/canasta_ink"
-                android:textSize="15sp" />
+                android:textSize="15sp"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/open_server"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="end"
-                android:text="@string/open_server" />
+                android:text="@string/open_server"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/error_detail"
@@ -137,6 +150,61 @@
                 android:textColor="@color/canasta_muted"
                 android:textIsSelectable="true"
                 android:textSize="12sp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Версия ниже minVersion из /api/config (docs/specs/mobile.md §3.6): поверх всего, сайт под ним не трогается -->
+    <ScrollView
+        android:id="@+id/update"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/canasta_background"
+        android:clickable="true"
+        android:fillViewport="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingStart="24dp"
+            android:paddingTop="40dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="24dp">
+
+            <ImageView
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_launcher_foreground" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/update_title"
+                android:textColor="@color/canasta_ink"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/update_hint"
+                android:textColor="@color/canasta_muted"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/update_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/update_button" />
         </LinearLayout>
     </ScrollView>
     </FrameLayout>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Сканер штрихкода на сайте -->
@@ -8,8 +9,13 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- Отклик при скане и таймер «Modo cocina» на сайте (navigator.vibrate) -->
+    <!-- Отклик при скане и таймер «Modo cocina» на сайте (navigator.vibrate): обычное, без запроса. Отклик «Agregar»
+         (CanastaApp.haptic) идёт через performHapticFeedback и этого разрешения не требует -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Рекламы у нас нет (анкета «Безопасность данных»): рекламный идентификатор убираем, даже если его подтянет
+         библиотека Google (пункт CEO 21.11, (9)) -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -23,17 +29,38 @@
         android:theme="@style/Theme.CanastaCerca"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
 
-        <!-- Поворот и смена размера не пересоздают экран: сайт не перезагружается -->
+        <!-- Поворот и смена размера не пересоздают экран: сайт не перезагружается. singleTask — наша ссылка из WhatsApp
+             открывается в том же окне (onNewIntent), а не во втором WebView -->
+        <!-- Подпись под значком — короткая (launcher_name): «Canasta Cerca» в лаунчерах не влезает и режется («Canasta Cer…»).
+             Полное имя остаётся у приложения: настройки телефона, Google Play -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
+            android:label="@string/launcher_name"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Наши ссылки — сразу в приложении (App Links, docs/specs/mobile.md §3.5). Проверку Android проходит, когда
+                 сервер отдаёт https://canastacerca.com/.well-known/assetlinks.json с отпечатком ключа из Play Console;
+                 до того ссылки открываются как раньше. Хост — тот же, что LINK_HOST в MainActivity -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="canastacerca.com" />
+            </intent-filter>
         </activity>
+
+        <!-- Crashlytics (если он в сборке — app/google-services.json): отчёты о падениях шлёт только release -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="${crashlyticsCollection}" />
 
         <!-- Картинка для «Compartir» (CanastaApp.share): отдаём её WhatsApp и другим приложениям -->
         <provider

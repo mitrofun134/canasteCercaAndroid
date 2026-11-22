@@ -9,3 +9,5 @@ build/
 .externalNativeBuild
 .cxx
 __pycache__/
+# Настройки Firebase (Crashlytics) — у ГД, не в публичный репозиторий
+google-services.json

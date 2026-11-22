@@ -1,13 +1,13 @@
 """Проверка оболочки Android против настоящего сайта (демо-режим): тот же JS, что внедряет MainActivity.kt.
 
-Берёт строки прямо из MainActivity.kt (bridgeJs, CLOSE_DIALOG, OPEN_IN_PLACE), подставляет их в Chrome
+Берёт строки прямо из MainActivity.kt (bridgeJs, CLOSE_DIALOG, OPEN_IN_PLACE, PULL_OK), подставляет их в Chrome
 с телефонным экраном и без navigator.share (как в WebView), а объект CanastaNative изображает WebMessageListener.
 
 Запуск (Python 3 и Playwright: pip install playwright && playwright install chromium):
   cd ~/Downloads/canasta-cerca && PORT=3077 node server.js --demo &
   cd ~/StudioProjects/canasta-cerca-android && python3 tools/bridge_test.py app/src/main/kotlin/ar/canastacerca/MainActivity.kt
 Свой Chrome вместо Chromium из Playwright: CHROME=/путь/к/chrome. Снимки страниц — в папку из SHOTS (если задана).
-Версию сборки сверяет с app/build.gradle.kts: после смены versionName/versionCode поправить version_name, version_code.
+Версию сборки (versionName, versionCode) берёт из app/build.gradle.kts рядом с MainActivity.kt.
 """
 import json
 import os
@@ -24,11 +24,21 @@ src = open(KT, encoding='utf-8').read()
 # --- JS из Kotlin ---
 raw = re.search(r'return """\n(.*?)""".trimIndent\(\)', src, re.S).group(1)
 raw = textwrap.dedent(raw).strip('\n')
-version_name, version_code = '0.3.1', '4'
+gradle = open(os.path.join(os.path.dirname(os.path.abspath(KT)), *(['..'] * 5), 'build.gradle.kts'), encoding='utf-8').read()
+version_name = re.search(r'versionName = "([^"]+)"', gradle).group(1)
+version_code = re.search(r'versionCode = (\d+)', gradle).group(1)
 info = json.dumps({'platform': 'android', 'version': f'{version_name}+{version_code}', 'push': 'off'}, separators=(',', ':'))
 native = re.search(r'const val NATIVE = "(\w+)"', src).group(1)
-bridge_js = raw.replace('${JSONObject.quote(info)}', json.dumps(info)).replace('$NATIVE', native)
-assert '$' not in bridge_js, bridge_js
+
+
+def bridge(share=True):
+    js = raw.replace('${JSONObject.quote(info)}', json.dumps(info)).replace('$NATIVE', native)
+    js = js.replace('$shareOn', 'true' if share else 'false')
+    assert '$' not in js, js
+    return js
+
+
+bridge_js = bridge()
 
 
 def kconst(name):
@@ -39,6 +49,12 @@ def kconst(name):
 
 CLOSE_DIALOG = kconst('CLOSE_DIALOG')
 OPEN_IN_PLACE = kconst('OPEN_IN_PLACE')
+PULL_OK = kconst('PULL_OK')
+PAGE_ASSETS = kconst('PAGE_ASSETS')
+CAN_RELOAD = kconst('CAN_RELOAD')
+FRESH_RELOAD = kconst('FRESH_RELOAD')
+# Регулярка SITE_ASSET из Kotlin: в Kotlin-строке \\ → \, \" → "
+SITE_ASSET = re.compile(json.loads('"' + re.search(r'val SITE_ASSET = Regex\("((?:[^"\\]|\\.)*)"\)', src).group(1) + '"'))
 
 # WebView: нет navigator.share; объект моста — как у WebMessageListener (postMessage + onmessage)
 FAKE_NATIVE = """
@@ -130,6 +146,41 @@ with sync_playwright() as p:
     check('«назад» закрывает открытую панель (<dialog>)', opened is True and first is True and still is False, f'opened={opened} first={first} still={still}')
     check('«назад» без панели — дальше по истории (CLOSE_DIALOG = false)', second is False)
 
+    # haptic(): лёгкий отклик при «Agregar» (T3) — сообщение без ответа
+    n0 = page.evaluate('window.__sent.length')
+    page.evaluate("CanastaApp.haptic()")
+    sent = page.evaluate('window.__sent.slice(-1)[0]')
+    check('haptic(): в приложение уходит {call: haptic, arg: {kind: tap}}', page.evaluate('window.__sent.length') == n0 + 1 and sent
+          and sent['call'] == 'haptic' and sent['arg'].get('kind') == 'tap', json.dumps(sent))
+
+    # «Потянуть — обновить» (PULL_OK): только наверху, без панели, не с карусели
+    page.evaluate('window.scrollTo(0, 0)')
+    page.wait_for_timeout(300)
+    plain = page.evaluate("""(() => {
+      for (let y = 8; y < innerHeight; y += 12) for (const x of [20, 195, 370]) {
+        const el = document.elementFromPoint(x, y);
+        if (!el) continue;
+        let ok = true;
+        for (let e = el; e && e !== document.body; e = e.parentElement) {
+          const s = getComputedStyle(e);
+          if (/auto|scroll/.test(s.overflowX + s.overflowY) || ['INPUT', 'CANVAS'].includes(e.tagName)) { ok = false; break; }
+        }
+        if (ok) return [x, y];
+      }
+      return null;
+    })()""")
+    at_plain = page.evaluate(f'{PULL_OK}({plain[0]},{plain[1]})') if plain else None
+    check('PULL_OK: наверху страницы, обычное место — можно тянуть', at_plain is True, f'точка {plain}')
+    page.evaluate("document.getElementById('dlg-loc').showModal()")
+    at_dlg = page.evaluate(f'{PULL_OK}({plain[0]},{plain[1]})') if plain else None
+    page.evaluate(CLOSE_DIALOG)
+    check('PULL_OK: открыта панель (<dialog>) — нельзя', at_dlg is False)
+    page.evaluate('window.scrollTo(0, 400)')
+    page.wait_for_timeout(300)
+    at_scrolled = page.evaluate(f'{PULL_OK}(195,300)')
+    page.evaluate('window.scrollTo(0, 0)')
+    check('PULL_OK: страница не в самом верху — нельзя', at_scrolled is False)
+
     # window.open → WhatsApp открывается снаружи
     page.evaluate(OPEN_IN_PLACE)
     try:
@@ -155,8 +206,69 @@ with sync_playwright() as p:
             page.screenshot(path=os.path.join(os.environ['SHOTS'], f'shot{path.replace("/", "_")}.png'))
     wide = {k: v for k, v in widths.items() if v > 390}
     check('страницы не шире экрана 390 px', not wide, json.dumps(widths))
+    # PULL_OK на карусели, которую листают пальцем (в демо на главной их нет — «Recetas» и «Descuentos»)
+    for path in ['/recetas', '/descuentos']:
+        page.goto(BASE + path, wait_until='networkidle')
+        page.wait_for_timeout(700)
+        page.evaluate('window.scrollTo(0, 0)')
+        car = page.evaluate("""(() => {
+          const sc = [...document.querySelectorAll('body *')].find((el) => {
+            const s = getComputedStyle(el), r = el.getBoundingClientRect();
+            return (s.overflowX === 'auto' || s.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1
+              && r.top >= 0 && r.bottom <= innerHeight && r.width > 100 && r.height > 30;
+          });
+          if (!sc) return null;
+          const r = sc.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, cls: String(sc.className).slice(0, 30) };
+        })()""")
+        at_car = page.evaluate(f"{PULL_OK}({car['x']},{car['y']})") if car else None
+        check(f'PULL_OK: палец на карусели ({path}) — нельзя', at_car is False, json.dumps(car))
+
     real_errors = [e for e in errors if 'net::ERR' not in e and 'Failed to load resource' not in e]
     check('нет ошибок JS', not real_errors, '; '.join(real_errors[:5]))
+
+    # Обновление сайта (§3.1): версия страницы против сервера — на неизменённом сайте разницы нет, на новом — есть
+    import urllib.request
+    same = {}
+    for path in ['/', '/catalogo', '/recetas', '/descuentos', '/canasta', '/ahorro']:
+        page.goto(BASE + path, wait_until='networkidle')
+        page.wait_for_timeout(500)
+        server = set(SITE_ASSET.findall(urllib.request.urlopen(BASE + path).read().decode('utf-8')))
+        have = set(page.evaluate(PAGE_ASSETS))
+        same[path] = bool(server) and server <= have
+    check('версия сайта: страница = сервер на 6 страницах (лишней перезагрузки нет)', all(same.values()), json.dumps(same))
+    server = sorted(SITE_ASSET.findall(urllib.request.urlopen(BASE + '/').read().decode('utf-8')))
+    newer = set(server[1:]) | {server[0].split('?v=')[0] + '?v=NEW'}
+    page.goto(BASE + '/', wait_until='networkidle')
+    have = set(page.evaluate(PAGE_ASSETS))
+    check('версия сайта: новый ?v= на сервере — заметно', not newer <= have, f'{len(server)} файлов с версией')
+    page.evaluate("document.getElementById('dlg-loc').showModal()")
+    busy = page.evaluate(CAN_RELOAD)
+    page.evaluate(CLOSE_DIALOG)
+    free = page.evaluate(CAN_RELOAD)
+    check('перезагрузка ждёт: с открытой панелью — нет, без неё — да', busy is False and free is True, f'{busy} {free}')
+    page.evaluate("""(async () => {
+      const c = await caches.open('cc-test');
+      for (const u of ['/', '/recetas', '/style.css?v=1', '/api/config', '/img/x.png']) await c.put(u, new Response('x'));
+    })()""")
+    page.evaluate(FRESH_RELOAD)
+    page.wait_for_load_state('networkidle')
+    page.wait_for_timeout(500)
+    left = page.evaluate("caches.open('cc-test').then(c => c.keys()).then(rs => rs.map(r => new URL(r.url).pathname + new URL(r.url).search).sort())")
+    check('свежая перезагрузка: из кэша сайта убраны страницы, файлы и данные остались', left == ['/api/config', '/img/x.png', '/style.css?v=1'], json.dumps(left))
+
+    # Флаг app.flags.share = false (§3.6): в мосте нет share — сайт делает «Compartir» как в браузере
+    ctx2 = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True,
+                         user_agent=UA, locale='es-AR')
+    ctx2.add_init_script(FAKE_NATIVE)
+    ctx2.add_init_script(bridge(share=False))
+    ctx2.route(re.compile(r'^https?://(?!localhost)'), lambda route: route.abort())
+    p2 = ctx2.new_page()
+    p2.goto(BASE + '/', wait_until='networkidle')
+    p2.wait_for_timeout(800)
+    no_share = p2.evaluate("({ app: typeof CanastaApp, share: typeof CanastaApp.share, inApp: inApp(), patched: navigator.__ccAppShare === true })")
+    check('флаг share выключен: моста share нет, сайт не подменяет navigator.share', no_share == {'app': 'object', 'share': 'undefined', 'inApp': True, 'patched': False},
+          json.dumps(no_share))
     b.close()
 
 failed = [r for r in results if not r[1]]
