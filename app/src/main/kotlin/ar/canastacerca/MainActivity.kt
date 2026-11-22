@@ -363,12 +363,14 @@ class MainActivity : ComponentActivity() {
 
     private fun showError(url: String, detail: String?) {
         errorShownFor = url
-        // В релизе — только код ошибки, без адреса сервера; ключ на экран не выводим никогда
-        errorDetail.text = if (BuildConfig.DEBUG) {
+        // Адрес сервера и код ошибки (net::ERR_…, HTTP 401) — только в отладочной сборке; в релизе — ничего технического
+        // (QA 22.11). Ключ на экран не выводим никогда
+        if (BuildConfig.DEBUG) {
             val server = Uri.parse(startUrl()).buildUpon().clearQuery().build()
-            getString(R.string.error_detail, server.toString(), detail.orEmpty())
+            errorDetail.text = getString(R.string.error_detail, server.toString(), detail.orEmpty())
+            errorDetail.visibility = View.VISIBLE
         } else {
-            detail.orEmpty()
+            errorDetail.visibility = View.GONE
         }
         progress.visibility = View.GONE
         loading.visibility = View.GONE
