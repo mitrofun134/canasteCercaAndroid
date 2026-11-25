@@ -275,7 +275,7 @@ class MainActivity : ComponentActivity() {
             textZoom = 100
             // Масштаб пальцами, как в Chrome (T5, letra-grande.md §3): «рассмотреть мелкое» на товаре или чеке. Без кнопок
             // «+/−» на экране
-            builtInControls = true
+            builtInZoomControls = true
             displayZoomControls = false
             // Ширина и initial-scale из meta viewport — как в Chrome. «Letra grande» меняет ширину страницы через meta (W239);
             // без этого WebView берёт только device-width, и сайт уходит в запасной CSS zoom. У всех страниц сайта meta
