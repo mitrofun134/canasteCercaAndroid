@@ -2,6 +2,7 @@
 # Демо-сервер сайта для CI (T7): выдуманные данные, без интернета и без ключа доступа — как qa/helpers/server.js
 # в репозитории сайта. Всё, что сервер пишет (события, история цен, обратная связь), — во временную папку.
 #   bash tools/ci/demo-server.sh <папка сайта> [порт]     лог — в $CC_OUT/demo-server-<порт>.log (по умолчанию ci-out/)
+# CC_HOST — на каком адресе слушать (по умолчанию 127.0.0.1; автотестам QA в приложении — 0.0.0.0, tools/ci/qa/in-app.sh).
 # Эмулятор видит компьютер как 10.0.2.2: debug-сборка приложения открывает http://10.0.2.2:3000/.
 set -euo pipefail
 WEB=$(cd "${1:?папка сайта}" && pwd)
@@ -21,7 +22,7 @@ if [ -f "$WEB/qa/fixtures/osm-belgrano.json" ]; then
 fi
 
 cd "$WEB"
-env PORT="$PORT" HOST=127.0.0.1 PREWARM=0 PUBLIC= ACCESS_KEY= METRICS_KEY= RATE_LIMIT= CLIENT_REQUIRED= \
+env PORT="$PORT" HOST="${CC_HOST:-127.0.0.1}" PREWARM=0 PUBLIC= ACCESS_KEY= METRICS_KEY= RATE_LIMIT= CLIENT_REQUIRED= \
   OSM_CACHE_FILE="$OSM" EVENTS_FILE="$TMP/events.jsonl" EVENTS_DIR= TEAM_IDS= EVENTS_MAX_DAY_MB= \
   OFFERS_CHANGES_FILE="$TMP/offer-changes.jsonl" HISTORY_DB="$TMP/history.sqlite" PRODUCT_MAP_FILE="$TMP/product-map.sqlite" \
   PROMO_ARCHIVE_DIR="$TMP/promos" LEGAL_DIR="$TMP/legales" INGEST_LOCK="$TMP/ingest.lock" \

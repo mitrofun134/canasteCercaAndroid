@@ -143,6 +143,13 @@ build id Crashlytics). Отчёты шлёт только release; debug — н�
   снимки, видео, logcat, вывод тестов и лог демо-сервера. Красный прогон нарочно: Actions → «Android — эмулятор» →
   Run workflow → `break_check`. Локально — `tools/ci/demo-server.sh <папка сайта>`, эмулятор, `./gradlew
   installDebug installDebugAndroidTest` и `CC_OUT=… CC_APK_DIR=app/build/outputs/apk bash tools/ci/emulator-run.sh`.
+- **Тест-кейсы QA P0/P1 в CI** (ГД 25.11) — в том же workflow, два задания. Кейсы — строки `qa/TEST-CASES.md` сайта
+  с P0 или P1 (`tools/ci/qa/cases.js`), автотесты — те же, что у QA, по номеру кейса в имени. «UI» и «e2e» — внутри
+  приложения на эмуляторе Android 14: `tools/ci/qa/android-preload.js` подменяет `launch`, `openPage` и `start` из
+  `qa/helpers` (файлы QA не меняются) — страница теста открывается в WebView приложения с нуля, сервер — общий демо
+  `http://10.0.2.2:3000`. «API» и «DATA» — без эмулятора (`tools/ci/qa/api.sh`). Итог — в сводке прогона: сколько
+  прошло, что упало и какие кейсы без автотеста. Пока QA не отобрал кейсы для приложения (Q124), красными прогон не
+  делают. Кейсы на базе дня (`snapshot`) в CI пропускаются: базы там нет.
 - **Мост против настоящего сайта** — `tools/bridge_test.py`: берёт JS моста прямо из `MainActivity.kt` и прогоняет сайт
   в демо-режиме в Chrome с экраном телефона и без `navigator.share`, как в WebView. 28 проверок: `appInfo()`,
   `X-CC-Client`, `pl: 'android'`, «Compartir» текстом и картинкой, `haptic()`, «назад» закрывает панель,

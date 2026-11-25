@@ -131,3 +131,87 @@ jobs:
           name: emulator-${{ matrix.slug }}
           path: ci-out
           retention-days: 14
+
+  # Тест-кейсы QA P0/P1 (qa/TEST-CASES.md сайта, ГД 25.11). Пока QA не отобрал, какие кейсы имеют смысл в приложении
+  # (Q124), эти два задания показывают итог, но не делают прогон красным (continue-on-error).
+  qa-api:
+    name: QA P0/P1 — API и данные
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mitrofun134/canasteCercaWeb
+          token: ${{ secrets.WEB_REPO_TOKEN }}
+          path: web
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: qa/api и qa/data — кейсы P0/P1
+        env:
+          CC_OUT: ${{ github.workspace }}/ci-out
+        run: bash tools/ci/qa/api.sh web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-api
+          path: ci-out
+          retention-days: 14
+
+  qa-app:
+    name: QA P0/P1 в приложении — Android 14, 412 dp
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mitrofun134/canasteCercaWeb
+          token: ${{ secrets.WEB_REPO_TOKEN }}
+          path: web
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk-debug
+          path: apk
+      - name: KVM для эмулятора
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Адрес 10.0.2.2 и на машине CI — один адрес сервера для приложения и для тестов
+        run: sudo ip addr add 10.0.2.2/32 dev lo
+      - name: Демо-сервер сайта на 0.0.0.0:3000
+        env:
+          CC_HOST: 0.0.0.0
+        run: bash tools/ci/demo-server.sh web 3000
+      - name: Эмулятор и кейсы QA UI/e2e внутри приложения
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          CC_NAME: QA в приложении, Android 14
+          CC_OUT: ${{ github.workspace }}/ci-out
+          CC_APK_DIR: ${{ github.workspace }}/apk
+          CC_WEB: ${{ github.workspace }}/web
+          CC_DENSITY: 420
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -timezone America/Argentina/Buenos_Aires
+          script: bash tools/ci/qa/in-app.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-app-android14
+          path: ci-out
+          retention-days: 14
