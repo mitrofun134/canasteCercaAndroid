@@ -19,6 +19,7 @@ import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -58,12 +59,30 @@ class ShellTest {
         }
     }
 
+    /** Медленный эмулятор показывает «System UI isn't responding»: такое окно забирает касания и «назад» — закрываем. */
+    @Before
+    fun closeSystemDialogs() {
+        dismissSystemDialogs()
+    }
+
     @After
     fun restore() {
         if (Build.VERSION.SDK_INT >= 30) device.executeShellCommand("cmd connectivity airplane-mode disable")
         device.executeShellCommand("svc wifi enable")
         device.executeShellCommand("svc data enable")
         device.executeShellCommand("settings put system font_scale 1.0")
+        // Следующая проверка — с сетью: ждём, пока сервер сайта снова виден из приложения
+        val until = SystemClock.elapsedRealtime() + WAIT
+        while (!serverUp() && SystemClock.elapsedRealtime() < until) SystemClock.sleep(500L)
+    }
+
+    private fun dismissSystemDialogs() {
+        for (i in 0 until 3) {
+            val wait = device.findObject(By.res("android", "aerr_wait")) ?: device.findObject(By.res("android", "aerr_close")) ?: return
+            Log.w(TAG, "системное окно «не отвечает» — закрываю")
+            wait.click()
+            SystemClock.sleep(500L)
+        }
     }
 
     /**
@@ -80,6 +99,7 @@ class ShellTest {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
         )
         waitActivity { it !== old }
+        dismissSystemDialogs()
         val retry = device.wait(Until.findObject(By.text(ctx.getString(R.string.retry))), WAIT)
         assertNotNull("без сети нет экрана с «Reintentar» (${appState()})", retry)
         assertTrue("без сети нет заголовка «${ctx.getString(R.string.error_title)}»", device.hasObject(By.text(ctx.getString(R.string.error_title))))
@@ -109,6 +129,7 @@ class ShellTest {
         SystemClock.sleep(600L) // лист выезжает
         shot("01-pay-sheet")
         assertEquals("на кнопке не «Saltar»", "\"Saltar\"", js("document.querySelector('#pay-onb-skip').textContent.trim()"))
+        dismissSystemDialogs()
         tapSite("#pay-onb-skip")
         waitJs("!document.querySelector('dialog[open]')", "«Saltar» не закрыл лист")
         shot("01-after-skip")
@@ -121,6 +142,7 @@ class ShellTest {
         js("document.getElementById('dlg-loc').showModal();true")
         waitJs("!!document.querySelector('dialog[open]')", "окно адреса не открылось")
         shot("02-dialog")
+        dismissSystemDialogs()
         device.pressBack()
         waitJs("!document.querySelector('dialog[open]')", "«назад» не закрыл окно сайта")
         SystemClock.sleep(500L)
@@ -155,6 +177,7 @@ class ShellTest {
         val a = activity()
         instr.runOnMainSync { a?.findViewById<WebView>(R.id.web)?.getGlobalVisibleRect(r) }
         assertTrue("WebView не на экране", r.height() > 0)
+        dismissSystemDialogs()
         device.swipe(r.centerX(), r.top + r.height() / 5, r.centerX(), r.top + r.height() * 3 / 4, 40)
         shot("05-pull")
         waitJs("document.readyState==='complete'&&typeof window.__ccPull==='undefined'", "«потянуть — обновить» не обновил страницу")

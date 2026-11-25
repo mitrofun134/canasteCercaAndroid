@@ -122,6 +122,9 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          # Android 14 с сервисами Google на 2 ГБ и 2 ядрах подтормаживает до окон «isn't responding»
+          cores: 3
+          ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash tools/ci/emulator-run.sh
@@ -214,6 +217,9 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          # Android 14 с сервисами Google на 2 ГБ и 2 ядрах подтормаживает до окон «isn't responding»
+          cores: 3
+          ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -timezone America/Argentina/Buenos_Aires
           script: bash tools/ci/qa/in-app.sh

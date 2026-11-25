@@ -52,7 +52,7 @@ async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   const { _android } = require(require.resolve('playwright', { paths: [WEB || process.cwd()] }));
   const measure = require('./measure.js');
-  const [device] = await _android.devices();
+  let device = (await _android.devices())[0];
   if (!device) throw new Error('adb не видит эмулятор');
   const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
 
@@ -79,10 +79,16 @@ async function main() {
   await page.evaluate(([k, v]) => localStorage.setItem(k, v), [STORAGE_KEY, JSON.stringify(state)]);
 
   const results = [];
+  let broken = false;
   for (const s of SCREENS) {
     const res = { ...s, shots: [], error: null };
     try {
-      if (page.isClosed()) await openApp();
+      // Прошлый экран оборвался (страница закрылась, «Device is closed», таймаут) — подключаемся и открываем заново
+      if (broken || page.isClosed()) {
+        broken = false;
+        device = (await _android.devices())[0] || device;
+        await openApp();
+      }
       await page.goto(APP_BASE + s.path, { waitUntil: 'load', timeout: 30000 });
       if (s.calc) {
         const btn = page.locator('#calc-btn');
@@ -124,6 +130,7 @@ async function main() {
       });
       res.bad = judge(res.m);
     } catch (e) {
+      broken = true;
       res.error = String(e.message || e).split('\n')[0];
       res.bad = [`не открылся: ${res.error}`];
     }

@@ -12,6 +12,8 @@ PKG=ar.canastacerca
 mkdir -p "$OUT/video"
 
 adb wait-for-device
+# Окна «… isn't responding» на медленном эмуляторе забирают касания и «назад» у тестов — не показывать
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
 if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY"; fi
 WV=$(adb shell dumpsys webviewupdate 2>/dev/null | tr -d '\r' | grep -m1 -i "current webview package" | sed 's/.*: *//')
 echo "Android $(adb shell getprop ro.build.version.release | tr -d '\r'), WebView ${WV:-?}, экран $(adb shell wm size | tr -d '\r' | sed 's/.*: //')"

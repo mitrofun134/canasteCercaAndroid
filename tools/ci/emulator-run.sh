@@ -30,6 +30,8 @@ report() {
 }
 
 adb wait-for-device
+# Окна «… isn't responding» на медленном эмуляторе забирают касания и «назад» у тестов — не показывать
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
 if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY"; fi
 adb shell settings put system font_scale 1.0
 {
