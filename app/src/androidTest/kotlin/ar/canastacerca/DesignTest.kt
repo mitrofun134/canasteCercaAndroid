@@ -164,12 +164,13 @@ class DesignTest {
             Screen("catalogo-yerba", "/catalogo/yerba", "Раздел каталога"),
             Screen("buscar-leche", "/buscar?q=leche", "Поиск «leche»"),
             Screen("producto-banana", "/p/banana", "Товар"),
-            Screen("canasta", "/canasta", "Корзина и ответ", calc = true),
             Screen("recetas", "/recetas", "Рецепты"),
             Screen("receta", "/recetas/milanesas-con-pure", "Рецепт"),
             Screen("descuentos", "/descuentos", "Скидки дня"),
             Screen("ahorro", "/ahorro", "«Mi ahorro»"),
             Screen("pagos", "/cuenta/pagos", "Способы оплаты"),
+            // Последней: на эмуляторе на ней обрывался весь прогон (25.11) — остальные экраны успевают сняться
+            Screen("canasta", "/canasta", "Корзина и ответ", calc = true),
         )
 
         const val SETTLED =

@@ -107,6 +107,12 @@ if [ "$fail" = 0 ] || [ -s "$OUT/shell-test.txt" ]; then
       mkdir -p "$OUT/design/android-$dp"
       adb pull /sdcard/Download/cc-design/. "$OUT/design/android-$dp/" >/dev/null 2>&1
       node "$(dirname "$0")/design/report.js" "$OUT/design-$dp.txt" "$OUT/design/android-$dp" "${CC_NAME%%,*}, $dp dp" || true
+      # Не дошёл до конца — почему: итог instrument и что было в logcat (падение, ANR, процесс сайта)
+      if ! grep -q "^OK (" "$OUT/design-$dp.txt"; then
+        why=$( { grep -m3 -E "shortMsg|longMsg|Caused by|Exception" "$OUT/design-$dp.txt";
+          grep -E "FATAL EXCEPTION|ANR in|has died|lowmemorykiller|onRenderProcessGone|Canasta|CanastaCI|chromium.*(crash|OOM)" "$OUT/logcat.txt" | tail -n 8; } | cut -c1-240 | tr '\n' '\001' | sed 's/%/%25/g; s/\x01/%0A/g; s/::/: /g')
+        echo "::warning title=$(prop "Дизайн · ${dp} dp · обрыв")::${why:-причина не найдена — design-$dp.txt и logcat.txt в артефакте}"
+      fi
     done
     if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY" >/dev/null; fi
   else
