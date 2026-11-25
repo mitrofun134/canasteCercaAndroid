@@ -111,6 +111,7 @@ jobs:
       - name: Эмулятор, тест оболочки, смоук QA
         uses: reactivecircus/android-emulator-runner@v2
         env:
+          CC_NAME: ${{ matrix.name }}
           CC_OUT: ${{ github.workspace }}/ci-out
           CC_APK_DIR: ${{ github.workspace }}/apk
           CC_WEB: ${{ github.workspace }}/web

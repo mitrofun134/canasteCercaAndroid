@@ -15,6 +15,20 @@ DEV_SHOTS=/sdcard/Download/cc-ci
 mkdir -p "$OUT/shots" "$OUT/video"
 fail=0
 
+# Итог проверок — в лог, ошибки — аннотациями (их видно на странице прогона и в PR без входа в GitHub),
+# таблица — в сводку прогона. $1 — заголовок, $2 — файл «имя<TAB>итог<TAB>ошибка»
+prop() { local v=${1//%/%25}; v=${v//,/%2C}; v=${v//:/%3A}; printf '%s' "$v"; }
+gherr() { local m=${2//%/%25}; echo "::error title=$(prop "$1")::${m:-без сообщения}"; }
+report() {
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '### %s — %s\n\n| Проверка | Итог | Ошибка |\n|---|---|---|\n' "${CC_NAME:-эмулятор}" "$1" >>"$GITHUB_STEP_SUMMARY"
+  while IFS=$'\t' read -r name st msg; do
+    printf '%-34s %s\n' "$name" "$st"
+    if [ "$st" = "УПАЛА" ]; then gherr "${CC_NAME:-Эмулятор} · $name" "$msg"; fi
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "| $name | $st | ${msg//|/\\|} |" >>"$GITHUB_STEP_SUMMARY"
+  done <"$2"
+  return 0
+}
+
 adb wait-for-device
 if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY"; fi
 adb shell settings put system font_scale 1.0
@@ -50,14 +64,23 @@ if [ "$fail" = 0 ]; then
   ARGS=()
   if [ "${CC_BREAK:-}" = "true" ]; then ARGS=(-e ccBreak 1); fi
   adb shell am instrument -w -r "${ARGS[@]}" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" | tr -d '\r' >"$OUT/shell-test.txt"
-  # Коротко: каждая проверка и итог
-  awk '/^INSTRUMENTATION_STATUS: test=/{t=substr($0,30)} /^INSTRUMENTATION_STATUS_CODE: /{c=$2; if(t!=""&&c!=1){printf "%-34s %s\n", t, (c==0?"ok":c==-3||c==-4?"пропущена":"УПАЛА"); t=""}}' "$OUT/shell-test.txt"
+  # Каждая проверка: имя, итог, первая строка ошибки (stack=…)
+  awk '/^INSTRUMENTATION_STATUS: test=/{t=substr($0,30)} /^INSTRUMENTATION_STATUS: stack=/{m=substr($0,31)}
+    /^INSTRUMENTATION_STATUS_CODE: /{c=$2; if(t!=""&&c!=1){s=(c==0?"ok":(c==-3||c==-4)?"пропущена":"УПАЛА");
+    print t "\t" s "\t" (s=="УПАЛА"?m:""); t=""; m=""}}' "$OUT/shell-test.txt" >"$OUT/shell-test.tsv"
+  report "Тест оболочки" "$OUT/shell-test.tsv"
   grep -E "^(OK \(|FAILURES!!!|Tests run:)" "$OUT/shell-test.txt" || true
   if ! grep -q "^OK (" "$OUT/shell-test.txt"; then
     fail=1
+    # Тест не дошёл до конца (упал процесс, нет эмулятора) — тоже видно без входа в GitHub
+    if ! grep -q "УПАЛА" "$OUT/shell-test.tsv"; then
+      gherr "${CC_NAME:-Эмулятор} · тест оболочки не закончился" "$(grep -m1 -E 'INSTRUMENTATION_(RESULT|FAILED)|shortMsg|longMsg|Error' "$OUT/shell-test.txt" | cut -c1-300)"
+    fi
     echo "== Что упало"
     awk '/^INSTRUMENTATION_STATUS: stack=/{p=1; print; next} /^INSTRUMENTATION_(STATUS|RESULT|CODE)/{p=0} p' "$OUT/shell-test.txt" | head -n 80
   fi
+else
+  gherr "${CC_NAME:-Эмулятор} · приложение не установилось" "adb install — см. лог шага"
 fi
 
 if [ -d "${CC_WEB:-}/qa/android" ] && ls "$CC_WEB"/qa/android/*.test.js >/dev/null 2>&1; then
