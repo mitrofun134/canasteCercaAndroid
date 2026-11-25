@@ -14,6 +14,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -72,7 +73,7 @@ class ShellTest {
         shot("01-start")
         js("navigate('/recetas');setTimeout(function(){navigate('/')},400);true")
         val skip = device.wait(Until.findObject(By.text("Saltar")), WAIT)
-        assertNotNull("нет листа «¿Con qué pagás?» с кнопкой «Saltar»", skip)
+        assertNotNull("нет листа «¿Con qué pagás?» с кнопкой «Saltar» (${siteState()})", skip)
         shot("01-pay-sheet")
         skip!!.click()
         waitJs("!document.querySelector('dialog[open]')", "«Saltar» не закрыл лист")
@@ -120,7 +121,8 @@ class ShellTest {
         )
         SystemClock.sleep(1500L)
         network(false)
-        instr.runOnMainSync { activity()?.findViewById<WebView>(R.id.web)?.reload() }
+        val a = activity()
+        instr.runOnMainSync { a?.findViewById<WebView>(R.id.web)?.reload() }
         val retry = device.wait(Until.findObject(By.text(ctx.getString(R.string.retry))), WAIT)
         assertNotNull("без сети нет экрана с «Reintentar»", retry)
         assertTrue("без сети нет заголовка «${ctx.getString(R.string.error_title)}»", device.hasObject(By.text(ctx.getString(R.string.error_title))))
@@ -141,7 +143,8 @@ class ShellTest {
         js("window.__ccPull=1;scrollTo(0,0);true")
         SystemClock.sleep(300L)
         val r = Rect()
-        instr.runOnMainSync { activity()?.findViewById<WebView>(R.id.web)?.getGlobalVisibleRect(r) }
+        val a = activity()
+        instr.runOnMainSync { a?.findViewById<WebView>(R.id.web)?.getGlobalVisibleRect(r) }
         assertTrue("WebView не на экране", r.height() > 0)
         device.swipe(r.centerX(), r.top + r.height() / 5, r.centerX(), r.top + r.height() * 3 / 4, 40)
         shot("05-pull")
@@ -152,6 +155,12 @@ class ShellTest {
     /** 6. Мост: CanastaApp.info() — платформа android и версия этой сборки. */
     @Test
     fun t06_bridgeInfo() {
+        // Старый WebView (без DOCUMENT_START_SCRIPT и WEB_MESSAGE_LISTENER) моста не получает: сайт — как в браузере
+        assumeTrue(
+            "WebView без моста: ${WebViewCompat.getCurrentWebViewPackage(ctx)?.versionName}",
+            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&
+                WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER),
+        )
         launch()
         val raw = js("window.CanastaApp?CanastaApp.info():null")
         assertTrue("нет window.CanastaApp", raw != null && raw != "null")
@@ -213,6 +222,12 @@ class ShellTest {
                 .setPackage(ctx.packageName).addFlags(flags),
         )
     }
+
+    /** Для сообщения об ошибке: какой WebView и дошли ли скрипты сайта до конца. */
+    private fun siteState(): String =
+        "WebView ${WebViewCompat.getCurrentWebViewPackage(ctx)?.versionName}, " +
+            "navigate: ${js("typeof navigate")}, payOnboardMaybe: ${js("typeof payOnboardMaybe")}, " +
+            "адрес: ${js("location.pathname")}, окно: ${js("(document.querySelector('dialog[open]')||{}).id||''")}"
 
     private fun siteHost(): String = Uri.parse(BuildConfig.CANASTA_BASE_URL).encodedAuthority.orEmpty()
 

@@ -37,6 +37,9 @@ adb shell settings put system font_scale 1.0
   echo "== Android"; adb shell getprop ro.build.version.release; adb shell getprop ro.build.version.sdk
   echo "== WebView"; adb shell dumpsys webviewupdate | grep -iE "current webview package|version" | head -5
 } | tee "$OUT/device.txt"
+# Версия Android и WebView — отметкой на странице прогона (видно без входа в GitHub)
+WV=$(adb shell dumpsys webviewupdate 2>/dev/null | tr -d '\r' | grep -m1 -i "current webview package" | sed 's/.*: *//')
+echo "::notice title=$(prop "${CC_NAME:-Эмулятор}")::Android $(adb shell getprop ro.build.version.release | tr -d '\r') (API $(adb shell getprop ro.build.version.sdk | tr -d '\r')), WebView ${WV:-?}"
 
 # logcat — весь прогон; видео — кусками по 170 с (screenrecord пишет не больше 3 минут за раз)
 adb logcat -c || true
