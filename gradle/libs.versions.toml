@@ -15,6 +15,10 @@ swiperefreshlayout = "1.1.0"
 firebaseBom = "35.1.0"
 # Firebase (через Google Play services) тянет androidx.fragment 1.0 — lint запрещает его рядом с registerForActivityResult
 fragment = "1.8.5"
+# Тест оболочки на эмуляторе (T7, app/src/androidTest): только для CI и ручного запуска, в приложение не попадает
+androidxTestRunner = "1.6.2"
+uiautomator = "2.3.0"
+junit = "4.13.2"
 
 [libraries]
 androidx-activity = { module = "androidx.activity:activity", version.ref = "activity" }
@@ -24,6 +28,9 @@ androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefre
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
+androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
+junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

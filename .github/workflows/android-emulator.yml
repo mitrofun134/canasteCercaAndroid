@@ -1,0 +1,132 @@
+# T7: оболочка и сайт внутри неё — на эмуляторе Android при каждом пуше и в каждом PR, без Mac и без ручного запуска.
+# Сайт — демо-сервер из mitrofun134/canasteCercaWeb (секрет WEB_REPO_TOKEN: только чтение этого репозитория, H51).
+# Репозиторий публичный, логи видны всем: ключ прода здесь не нужен (демо без ключа), токен в лог не печатаем.
+name: Android — эмулятор
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      break_check:
+        description: "Приёмка T7: намеренно сломанная проверка — прогон должен стать красным"
+        type: boolean
+        default: false
+
+concurrency:
+  group: emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Сборка debug и теста
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: assembleDebug, assembleDebugAndroidTest
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          retention-days: 7
+
+  bridge:
+    name: Мост в Chromium (tools/bridge_test.py)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mitrofun134/canasteCercaWeb
+          token: ${{ secrets.WEB_REPO_TOKEN }}
+          path: web
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Playwright и Chromium
+        run: pip install --quiet playwright && python -m playwright install --with-deps chromium >/dev/null
+      - name: Демо-сервер сайта
+        run: bash tools/ci/demo-server.sh web 3077
+      - name: bridge_test.py
+        # localhost, а не 127.0.0.1: тест не пускает страницу ни на какие адреса, кроме localhost
+        run: mkdir -p ci-out/bridge && SHOTS=ci-out/bridge python tools/bridge_test.py app/src/main/kotlin/ar/canastacerca/MainActivity.kt http://localhost:3077
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bridge
+          path: ci-out
+          retention-days: 14
+
+  emulator:
+    name: Эмулятор ${{ matrix.name }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Экран 1080 × 2400 (pixel_6): плотность 480 — 360 × 800 dp, 420 — 412 × 915 dp
+          - { name: "Android 10, 360 dp", api: 29, density: 480, slug: android10-360 }
+          - { name: "Android 14, 412 dp", api: 34, density: 420, slug: android14-412 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mitrofun134/canasteCercaWeb
+          token: ${{ secrets.WEB_REPO_TOKEN }}
+          path: web
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk-debug
+          path: apk
+      - name: KVM для эмулятора
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Демо-сервер сайта (эмулятор видит его как 10.0.2.2:3000)
+        run: bash tools/ci/demo-server.sh web 3000
+      - name: Эмулятор, тест оболочки, смоук QA
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          CC_OUT: ${{ github.workspace }}/ci-out
+          CC_APK_DIR: ${{ github.workspace }}/apk
+          CC_WEB: ${{ github.workspace }}/web
+          CC_DENSITY: ${{ matrix.density }}
+          CC_BREAK: ${{ inputs.break_check }}
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: bash tools/ci/emulator-run.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-${{ matrix.slug }}
+          path: ci-out
+          retention-days: 14

@@ -40,6 +40,9 @@ android {
         versionCode = 7
         versionName = "0.3.4"
 
+        // Тест оболочки на эмуляторе (T7): app/src/androidTest, запуск — tools/ci/emulator-run.sh
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         // Ключ доступа: пока сайт закрыт (B80), сборки для тестеров и для проверки Google несут ключ
         buildConfigField("String", "CANASTA_ACCESS_KEY", "\"$accessKey\"")
 
@@ -98,6 +101,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.swiperefreshlayout)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(libs.junit)
 
     // Crashlytics — только с app/google-services.json (firebaseConfig выше)
     if (firebaseConfig != null) {

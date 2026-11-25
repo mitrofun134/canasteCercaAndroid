@@ -134,6 +134,15 @@ build id Crashlytics). Отчёты шлёт только release; debug — н�
 
 ## Проверка
 
+- **Эмулятор в GitHub Actions** (T7, `.github/workflows/android-emulator.yml`) — на каждый пуш и в каждом PR, без Mac:
+  debug-сборка на Android 10 (360 dp) и Android 14 (412 dp), сайт — демо-сервер из `canasteCercaWeb` (секрет
+  `WEB_REPO_TOKEN`, только чтение). Тест оболочки `app/src/androidTest` (UiAutomator): запуск и «Saltar», «назад»
+  закрывает окно сайта, ссылки `canastacerca.com` с нуля и в открытом приложении, без сети — «Reintentar», «потянуть —
+  обновить», `CanastaApp.info()`, шрифт системы 1,3 и главная без прокрутки вбок. Потом — смоук QA из `qa/android/`
+  сайта (Q124, Playwright для Android), если он там есть, и рядом — `tools/bridge_test.py`. В артефактах прогона —
+  снимки, видео, logcat, вывод тестов и лог демо-сервера. Красный прогон нарочно: Actions → «Android — эмулятор» →
+  Run workflow → `break_check`. Локально — `tools/ci/demo-server.sh <папка сайта>`, эмулятор, `./gradlew
+  installDebug installDebugAndroidTest` и `CC_OUT=… CC_APK_DIR=app/build/outputs/apk bash tools/ci/emulator-run.sh`.
 - **Мост против настоящего сайта** — `tools/bridge_test.py`: берёт JS моста прямо из `MainActivity.kt` и прогоняет сайт
   в демо-режиме в Chrome с экраном телефона и без `navigator.share`, как в WebView. 28 проверок: `appInfo()`,
   `X-CC-Client`, `pl: 'android'`, «Compartir» текстом и картинкой, `haptic()`, «назад» закрывает панель,
