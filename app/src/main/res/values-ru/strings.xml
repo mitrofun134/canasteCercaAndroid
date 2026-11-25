@@ -12,4 +12,6 @@
     <string name="update_title">Обновите приложение</string>
     <string name="update_hint">Вышла новая версия Canasta Cerca. Чтобы и дальше сравнивать цены, обновите её в Google Play.</string>
     <string name="update_button">Обновить</string>
+    <string name="webview_title">Обновите %1$s</string>
+    <string name="webview_hint">Чтобы открыть Canasta Cerca, телефону нужна более новая версия %1$s. Обновите её бесплатно в Google Play и вернитесь в приложение.</string>
 </resources>

@@ -181,7 +181,8 @@
         </LinearLayout>
     </ScrollView>
 
-    <!-- Версия ниже minVersion из /api/config (docs/specs/mobile.md §3.6): поверх всего, сайт под ним не трогается -->
+    <!-- Версия ниже minVersion из /api/config (docs/specs/mobile.md §3.6): поверх всего, сайт под ним не трогается.
+         Тот же экран — «Actualizá Android System WebView», если WebView ниже BuildConfig.MIN_WEBVIEW (тексты — из кода) -->
     <ScrollView
         android:id="@+id/update"
         android:layout_width="match_parent"
@@ -209,6 +210,7 @@
                 android:src="@drawable/ic_launcher_foreground" />
 
             <TextView
+                android:id="@+id/update_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -219,6 +221,7 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/update_hint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"

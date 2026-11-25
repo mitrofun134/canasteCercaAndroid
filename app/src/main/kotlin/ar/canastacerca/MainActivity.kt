@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -69,7 +70,8 @@ import java.net.URL
  * сайта и листает его историю, «потянуть вниз — обновить», разрешения на камеру (сканер) и геолокацию — только нашему
  * сайту, ссылки наружу (WhatsApp, карты, сайты сетей), наши ссылки canastacerca.com — сразу здесь (App Links),
  * мост window.CanastaApp (docs/specs/mobile.md §3.2 в веб-проекте), флаги и обязательное обновление из /api/config
- * (§3.6) и экран «сайт не открылся». Поле для другой ссылки на сервер на этом экране — только в отладочной сборке.
+ * (§3.6), экран «сайт не открылся» (и когда сеть «висит» — первого кадра нет 30 с) и экран «обновите WebView» на WebView
+ * ниже BuildConfig.MIN_WEBVIEW. Поле для другой ссылки на сервер на экране ошибки — только в отладочной сборке.
  */
 class MainActivity : ComponentActivity() {
 
@@ -134,6 +136,22 @@ class MainActivity : ComponentActivity() {
     /** Сайт не отвечает на касания (onRenderProcessUnresponsive): с какого сигнала; 0 — отвечает. */
     private var unresponsiveSince = 0L
     private var hangReported = false
+
+    /**
+     * Первый кадр сайта не пришёл за FIRST_FRAME_MS (W329 п. 5): сеть «висит» — соединение не обрывается, а ждёт, и
+     * WebView сам сдаётся через минуту и больше, всё это время на экране Firu. Тогда — экран «No pudimos abrir…».
+     */
+    private val firstFrameTimeout = Runnable { onStalled() }
+
+    /** Загрузку остановили по FIRST_FRAME_MS: её onPageFinished (ERR_ABORTED) не должен прятать экран ошибки. */
+    private var stalled = false
+
+    /**
+     * WebView телефона ниже BuildConfig.MIN_WEBVIEW (ГД 25.11, W329 п. 3): сайт на нём пустой или разваливается
+     * (`?.`/`??` — Chrome 80, `:has()` и `@container` — 105). Вместо сайта — экран «Actualizá …» с кнопкой в Google Play.
+     * null — WebView подходит (или его версию не узнать).
+     */
+    private var oldWebView: PackageInfo? = null
 
     /** Раздел app из /api/config (§3.6), последний полученный: флаги и minVersion действуют и без сети. */
     private var appConfig = JSONObject()
@@ -212,20 +230,26 @@ class MainActivity : ComponentActivity() {
         installBridge()
         watchRenderer()
         onBackPressedDispatcher.addCallback(this, back)
+        oldWebView = webViewTooOld()
         applyAppConfig()
         fetchAppConfig()
 
+        // Старый WebView: сайт не грузим — экран «Actualizá …». После обновления WebView из Play система сама
+        // перезапускает приложение (процессы со старым WebView завершаются), и сайт откроется как обычно
+        if (oldWebView != null) return
         val link = linkFrom(intent)
         when {
             savedInstanceState == null && link != null -> web.loadUrl(link)
             savedInstanceState == null || web.restoreState(savedInstanceState) == null -> web.loadUrl(startUrl())
         }
+        watchFirstFrame()
     }
 
     /** Наша ссылка, пока приложение уже открыто (из WhatsApp, из пуша): открываем её здесь же. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (oldWebView != null) return
         linkFrom(intent)?.let {
             hideError()
             web.loadUrl(it)
@@ -249,6 +273,14 @@ class MainActivity : ComponentActivity() {
             // в px: при крупном шрифте текст распирает блоки и на экран влезает мало. Сайт — в своём размере, как в
             // браузере; крупный шрифт для тех, кому он нужен, — со стороны сайта (W138)
             textZoom = 100
+            // Масштаб пальцами, как в Chrome (T5, letra-grande.md §3): «рассмотреть мелкое» на товаре или чеке. Без кнопок
+            // «+/−» на экране
+            builtInControls = true
+            displayZoomControls = false
+            // Ширина и initial-scale из meta viewport — как в Chrome. «Letra grande» меняет ширину страницы через meta (W239);
+            // без этого WebView берёт только device-width, и сайт уходит в запасной CSS zoom. У всех страниц сайта meta
+            // viewport есть — без неё страница стала бы шириной 980 px (проверено 22.11, `public/*.html`)
+            useWideViewPort = true
             // Чтобы сервер отличал приложение от браузера; сайт узнаёт себя в приложении по CanastaApp.info()
             userAgentString = "$userAgentString CanastaCercaAndroid/${BuildConfig.VERSION_NAME}"
         }
@@ -272,20 +304,14 @@ class MainActivity : ComponentActivity() {
         pull.setOnRefreshListener {
             when {
                 web.url.isNullOrEmpty() -> web.loadUrl(startUrl())
-                errorPanel.visibility == View.VISIBLE -> {
-                    hideError()
-                    web.reload()
-                }
+                errorPanel.visibility == View.VISIBLE -> retry()
                 else -> freshReload()
             }
         }
     }
 
     private fun setUpErrorPanel() {
-        findViewById<Button>(R.id.retry).setOnClickListener {
-            hideError()
-            if (web.url.isNullOrEmpty()) web.loadUrl(startUrl()) else web.reload()
-        }
+        findViewById<Button>(R.id.retry).setOnClickListener { retry() }
         val open = findViewById<Button>(R.id.open_server)
         val hint = findViewById<TextView>(R.id.error_hint)
         // Поле для другой ссылки на сервер (туннель npm run share) — только в отладочной сборке: в релизе это была бы
@@ -399,7 +425,37 @@ class MainActivity : ComponentActivity() {
         back.isEnabled = true
     }
 
+    /**
+     * «Reintentar» и «потянуть» на экране ошибки: та же страница заново. Если первый кадр так и не пришёл (onStalled) или
+     * страницы нет вовсе — заново по адресу, иначе reload(). И снова ждём первый кадр не дольше FIRST_FRAME_MS.
+     */
+    private fun retry() {
+        val failed = errorShownFor
+        val wasStalled = stalled
+        hideError()
+        val current = web.url
+        if (wasStalled || current.isNullOrEmpty() || current == "about:blank") web.loadUrl(failed ?: startUrl()) else web.reload()
+        watchFirstFrame()
+    }
+
+    /** Ждём первый кадр сайта (onPageCommitVisible) не дольше FIRST_FRAME_MS: запуск и «Reintentar». */
+    private fun watchFirstFrame() {
+        main.removeCallbacks(firstFrameTimeout)
+        main.postDelayed(firstFrameTimeout, FIRST_FRAME_MS)
+    }
+
+    /** Первого кадра нет FIRST_FRAME_MS: загрузку останавливаем, вместо Firu — экран «No pudimos abrir…» с «Reintentar». */
+    private fun onStalled() {
+        if (webGone || errorPanel.visibility == View.VISIBLE || updatePanel.visibility == View.VISIBLE) return
+        val url = web.url?.takeIf { it.isNotEmpty() && it != "about:blank" } ?: startUrl()
+        Log.w(TAG, "нет первого кадра за ${FIRST_FRAME_MS / 1000} с: ${Uri.parse(url).path}")
+        stalled = true
+        web.stopLoading()
+        showError(url, "sin respuesta en ${FIRST_FRAME_MS / 1000} s")
+    }
+
     private fun showError(url: String, detail: String?) {
+        main.removeCallbacks(firstFrameTimeout)
         errorShownFor = url
         // Адрес сервера и код ошибки (net::ERR_…, HTTP 401) — только в отладочной сборке; в релизе — ничего технического
         // (QA 22.11). Ключ на экран не выводим никогда
@@ -418,6 +474,7 @@ class MainActivity : ComponentActivity() {
 
     private fun hideError() {
         errorShownFor = null
+        stalled = false
         errorPanel.visibility = View.GONE
     }
 
@@ -610,8 +667,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Версия ниже minVersion.android — экран «Actualizá la app» поверх всего. */
+    /** Версия ниже minVersion.android — экран «Actualizá la app» поверх всего. Старый WebView — свой экран (важнее). */
     private fun applyAppConfig() {
+        if (oldWebView != null) {
+            showWebViewUpdate()
+            return
+        }
         val min = appConfig.optJSONObject("minVersion")?.opt("android")
         updatePanel.visibility = if (belowMin(min)) View.VISIBLE else View.GONE
     }
@@ -648,12 +709,40 @@ class MainActivity : ComponentActivity() {
 
     private fun setUpUpdatePanel() {
         findViewById<Button>(R.id.update_button).setOnClickListener {
-            val market = Uri.parse("market://details?id=$packageName")
+            // Старый WebView — его страница в Play (Android System WebView или Chrome на Android 8–9), иначе — наша
+            val id = oldWebView?.packageName ?: packageName
+            val market = Uri.parse("market://details?id=$id")
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, market))
             } catch (e: ActivityNotFoundException) {
-                openOutside(Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+                openOutside(Uri.parse("https://play.google.com/store/apps/details?id=$id"))
             }
+        }
+    }
+
+    /* ---------- Старый WebView (ГД 25.11, W329 п. 3) ---------- */
+
+    /** WebView телефона, если он ниже BuildConfig.MIN_WEBVIEW; версию не узнать — считаем, что подходит. */
+    private fun webViewTooOld(): PackageInfo? {
+        val info = WebViewCompat.getCurrentWebViewPackage(this) ?: return null
+        val major = info.versionName?.substringBefore('.')?.toIntOrNull() ?: return null
+        return if (major < BuildConfig.MIN_WEBVIEW) info else null
+    }
+
+    /**
+     * «Actualizá Android System WebView» (на Android 8–9 WebView бывает от Chrome — тогда «Actualizá Chrome»): имя — как
+     * у приложения в телефоне. Тот же экран, что «Actualizá la app», со своими текстами; в Crashlytics — раз за запуск.
+     */
+    private fun showWebViewUpdate() {
+        val info = oldWebView ?: return
+        val name = info.applicationInfo?.let { packageManager.getApplicationLabel(it).toString() } ?: "Android System WebView"
+        findViewById<TextView>(R.id.update_title).text = getString(R.string.webview_title, name)
+        findViewById<TextView>(R.id.update_hint).text = getString(R.string.webview_hint, name)
+        hideSplash()
+        updatePanel.visibility = View.VISIBLE
+        if (!webViewReported) {
+            webViewReported = true
+            reportNonFatal(IllegalStateException("WebView ${info.versionName} ниже ${BuildConfig.MIN_WEBVIEW}: экран обновления"))
         }
     }
 
@@ -797,12 +886,19 @@ class MainActivity : ComponentActivity() {
         return runCatching { file.writeBytes(bytes) }.map { file to mime }.getOrNull()
     }
 
+    /**
+     * Масштаб шрифта телефона — для подсказки «Letra grande» на сайте (T5, letra-grande.md §3): 1 — обычный, 1,3 — крупный;
+     * два знака. Шрифт поменяли в настройках — экран пересоздаётся (fontScale нет в configChanges), мост — с новым числом.
+     */
+    private fun fontScale(): Double = Math.round(resources.configuration.fontScale * 100.0) / 100.0
+
     /** То, что видит сайт: window.CanastaApp с info(), share() и haptic(). Ответы — событием «canastaapp». */
     private fun bridgeJs(): String {
         val info = JSONObject()
             .put("platform", "android")
             .put("version", "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}")
             .put("push", "off")
+            .put("fontScale", fontScale())
             .toString()
         val shareOn = flagOn("share")
         return """
@@ -891,6 +987,7 @@ class MainActivity : ComponentActivity() {
 
         // Первый кадр сайта нарисован. Firu уйдёт, когда скрипты сайта выполнятся (checkReady), — до этого не нажимается
         override fun onPageCommitVisible(view: WebView, url: String?) {
+            main.removeCallbacks(firstFrameTimeout)
             if (loading.visibility == View.VISIBLE) {
                 main.removeCallbacks(readyCheck)
                 main.removeCallbacks(splashTimeout)
@@ -902,7 +999,8 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageFinished(view: WebView, url: String?) {
             view.evaluateJavascript(OPEN_IN_PLACE, null)
-            val ok = url != errorShownFor
+            // Остановленная по FIRST_FRAME_MS загрузка тоже приходит сюда (ERR_ABORTED) — экран ошибки не прячем
+            val ok = url != errorShownFor && !stalled
             if (frozen && ok) {
                 // Сайт загрузился — снимок уберём, когда он дорисуется (без заглушек), но не позже чем через 3 с
                 settleDeadline = SystemClock.elapsedRealtime() + 3_000L
@@ -1064,6 +1162,12 @@ class MainActivity : ComponentActivity() {
         /** Когда в прошлый раз завершали зависший процесс сайта (watchRenderer): второй раз за 2 минуты — нет. */
         var lastHangKill = 0L
 
+        /** Старый WebView уже записан в Crashlytics в этом процессе: экран пересоздаётся при повороте и шрифте. */
+        var webViewReported = false
+
+        /** Первый кадр сайта при запуске и после «Reintentar» — не дольше (W329 п. 5); дальше — экран ошибки. */
+        const val FIRST_FRAME_MS = 30_000L
+
         /** На экране сайт перезагружаем по версии только после стольких мс без касаний (тестер 24.11). */
         const val IDLE_MS = 30_000L
 
@@ -1141,12 +1245,13 @@ class MainActivity : ComponentActivity() {
 
         /**
          * Можно ли «потянуть — обновить» из точки касания (x, y в CSS px): страница в самом верху, нет открытой панели
-         * (<dialog>) и прокрутка страницы не заперта (лист поверх), а под пальцем нет карусели, карты, поля ввода,
-         * своей прокрутки и touch-action без вертикали.
+         * (<dialog>), страница не увеличена пальцами (видимая часть уже страницы, T5) и прокрутка страницы не заперта
+         * (лист поверх), а под пальцем нет карусели, карты, поля ввода, своей прокрутки и touch-action без вертикали.
          */
         const val PULL_OK =
-            "(function(x,y){try{var d=document,se=d.scrollingElement||d.documentElement,b=d.body;" +
+            "(function(x,y){try{var d=document,se=d.scrollingElement||d.documentElement,b=d.body,vv=window.visualViewport;" +
                 "if(!b||window.scrollY>0||(se&&se.scrollTop>0)||d.querySelector('dialog[open]'))return false;" +
+                "if(vv&&vv.width*1.02<d.documentElement.clientWidth)return false;" +
                 "var oh=function(e){var s=getComputedStyle(e);return s.overflowY==='hidden'||s.overflow==='hidden';};" +
                 "if(oh(b)||oh(d.documentElement))return false;" +
                 "for(var el=d.elementFromPoint(x,y);el&&el!==b&&el!==d.documentElement;el=el.parentElement){" +

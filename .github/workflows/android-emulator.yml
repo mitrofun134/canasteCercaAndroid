@@ -2,6 +2,8 @@
 # Сайт — демо-сервер из mitrofun134/canasteCercaWeb (секрет WEB_REPO_TOKEN: только чтение этого репозитория, H51).
 # Репозиторий публичный, логи видны всем: ключ прода здесь не нужен (демо без ключа), токен в лог не печатаем.
 name: Android — эмулятор
+# Действия — версии на Node.js 24 (Node.js 20 в Actions устарел): checkout/setup-java/setup-node v5, setup-python v6,
+# upload-artifact v6, download-artifact v7, setup-gradle v5
 
 on:
   push:
@@ -26,15 +28,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       - name: assembleDebug, assembleDebugAndroidTest
         run: ./gradlew assembleDebug assembleDebugAndroidTest --console=plain
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: apk-debug
           path: |
@@ -47,17 +49,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           repository: mitrofun134/canasteCercaWeb
           token: ${{ secrets.WEB_REPO_TOKEN }}
           path: web
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - uses: actions/setup-python@v5
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Playwright и Chromium
@@ -67,7 +70,7 @@ jobs:
       - name: bridge_test.py
         # localhost, а не 127.0.0.1: тест не пускает страницу ни на какие адреса, кроме localhost
         run: mkdir -p ci-out/bridge && SHOTS=ci-out/bridge python tools/bridge_test.py app/src/main/kotlin/ar/canastacerca/MainActivity.kt http://localhost:3077
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: bridge
@@ -85,20 +88,23 @@ jobs:
         include:
           # Экран 1080 × 2400 (pixel_6): плотность 480 — 360 × 800 dp, 420 — 412 × 915 dp
           # gpu: на Android 14 карта сайта (WebGL) под swiftshader роняла эмулятор целиком — там swangle (ANGLE + SwiftShader)
-          - { name: "Android 10, 360 dp", api: 29, density: 480, slug: android10-360, gpu: swiftshader_indirect }
+          # Android 10: WebView образа — 74, ниже минимума 105 (ГД 25.11) — здесь проверяется экран «Actualizá Android
+          # System WebView» (t09), сайт не открывается. Сайт на 360 dp — на Android 14 (t08 меняет плотность, DesignTest)
+          - { name: "Android 10, старый WebView", api: 29, density: 480, slug: android10-360, gpu: swiftshader_indirect }
           - { name: "Android 14, 412 dp", api: 34, density: 420, slug: android14-412, gpu: swangle_indirect }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           repository: mitrofun134/canasteCercaWeb
           token: ${{ secrets.WEB_REPO_TOKEN }}
           path: web
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - uses: actions/download-artifact@v4
+          package-manager-cache: false
+      - uses: actions/download-artifact@v7
         with:
           name: apk-debug
           path: apk
@@ -129,14 +135,14 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu ${{ matrix.gpu }} -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash tools/ci/emulator-run.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: emulator-${{ matrix.slug }}
           path: ci-out
           retention-days: 14
       # Для дизайнера отдельно (D96): снимки и замер на 412 и 360 dp, index.html; на Mac — tools/ci/design-pull.command
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: design-${{ matrix.slug }}
@@ -152,21 +158,22 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           repository: mitrofun134/canasteCercaWeb
           token: ${{ secrets.WEB_REPO_TOKEN }}
           path: web
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
+          package-manager-cache: false
       - name: qa/api и qa/data — кейсы P0/P1
         env:
           CC_OUT: ${{ github.workspace }}/ci-out
         run: bash tools/ci/qa/api.sh web
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: qa-api
@@ -180,17 +187,18 @@ jobs:
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           repository: mitrofun134/canasteCercaWeb
           token: ${{ secrets.WEB_REPO_TOKEN }}
           path: web
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - uses: actions/download-artifact@v4
+          package-manager-cache: false
+      - uses: actions/download-artifact@v7
         with:
           name: apk-debug
           path: apk
@@ -224,7 +232,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -timezone America/Argentina/Buenos_Aires
           script: bash tools/ci/qa/in-app.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: qa-app-android14

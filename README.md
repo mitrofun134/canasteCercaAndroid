@@ -43,8 +43,9 @@
   загрузки. «Растягивания» за край у WebView нет (`OVER_SCROLL_NEVER`) — оно спорило с жестом.
 - **Мост `window.CanastaApp`** (`docs/specs/mobile.md` §3.2 в веб-проекте) — только на страницах нашего сайта
   (`WebViewCompat.addWebMessageListener` и `addDocumentStartJavaScript` с правилом по адресу):
-  - `info()` → `{"platform":"android","version":"0.3.4+7","push":"off"}`: сайт знает, что он в приложении, — события
-    идут с `pl: 'android'`, запросы — с `X-CC-Client: android/0.3.4+7 web/…`;
+  - `info()` → `{"platform":"android","version":"0.3.5+8","push":"off","fontScale":1}`: сайт знает, что он в приложении, —
+    события идут с `pl: 'android'`, запросы — с `X-CC-Client: android/0.3.5+8 web/…`; `fontScale` (с 0.3.5, T5) — масштаб
+    шрифта телефона, два знака: от 1,15 сайт один раз предлагает «Letra grande» (`docs/specs/letra-grande.md` §3);
   - `share({text, url, image})` → системное меню «Поделиться», картинка «Compartir mi ahorro» уходит картинкой
     (файл в кэше, `FileProvider`). Ответ сайту — событием `canastaapp`. Флаг `app.flags.share = false` в `/api/config` —
     `share` в мосте нет, сайт делится как в браузере.
@@ -52,6 +53,9 @@
     «Agregar» (W192). `kind` пока один — `'tap'`.
   - `pushAsk`, `scan`, `openSettings` — в следующих версиях; без них сайт работает как в браузере. На старом WebView
     без нужных возможностей моста нет, сайт тоже работает как в браузере.
+- **Масштаб пальцами** (с 0.3.5, T5) — как в Chrome, без кнопок «+/−» (`builtInControls`, `displayZoomControls = false`):
+  рассмотреть мелкое на товаре или чеке. Увеличенную страницу «потянуть» не обновляет. Ширина страницы — из её
+  `meta viewport` (`useWideViewPort`, как в Chrome): так работает «Letra grande» сайта (W239). `textZoom = 100` — как было.
 - **Хранение.** localStorage и cookie сохраняются между запусками: корзина, адрес, способы оплаты, покупки и ключ доступа.
 - **Свежий сайт** (с 0.3.2). Android держит приложение в памяти, и значок возвращает ту же страницу хоть через сутки,
   а service worker сайта может показать сохранённую страницу. Поэтому приложение сверяет версию сайта с сервером:
@@ -75,8 +79,14 @@
 - **Чужие ссылки** (WhatsApp, «Cómo llegar», сайты сетей, `tel:`, `mailto:`) открываются в своих приложениях;
   `window.open` сайта — тоже.
 - **Экран «не открылось»**: нет сети, сервер выключен, туннель сменился (5xx) или ключ неверный (401) — «Reintentar»
-  (синяя кнопка, как на сайте). Код ошибки и поле для новой ссылки на сервер — только в debug. Тексты ES/RU по языку
-  телефона.
+  (синяя кнопка, как на сайте). С 0.3.5 и когда сеть «висит» (соединение не обрывается, а ждёт): при запуске и после
+  «Reintentar» первого кадра сайта нет 30 с (`FIRST_FRAME_MS`, W329 п. 5) — загрузка останавливается, вместо Firu этот
+  экран. Код ошибки и поле для новой ссылки на сервер — только в debug. Тексты ES/RU по языку телефона.
+- **Старый WebView** (с 0.3.5, ГД 25.11, W329 п. 3): сайту нужен WebView 105+ (`BuildConfig.MIN_WEBVIEW`: `?.`/`??` — с 80,
+  `:has()` и `@container` — со 105). Ниже — сайт не открывается, вместо него экран «Actualizá Android System WebView»
+  (имя — как у WebView в телефоне; на Android 8–9 это бывает Chrome) с кнопкой на его страницу в Google Play; в
+  Crashlytics — раз за запуск. Живые телефоны обновляют WebView из Play сами; Android 8–9 застыл на 138 — им хватает.
+  После обновления WebView система сама перезапускает приложение, и сайт открывается.
 - **User-Agent** — системный плюс `CanastaCercaAndroid/<версия>` (по системному сервер определяет `os`).
 - **Отладка.** В debug-сборке сайт внутри приложения виден в Chrome на компьютере: `chrome://inspect`.
 
@@ -135,10 +145,12 @@ build id Crashlytics). Отчёты шлёт только release; debug — н�
 ## Проверка
 
 - **Эмулятор в GitHub Actions** (T7, `.github/workflows/android-emulator.yml`) — на каждый пуш и в каждом PR, без Mac:
-  debug-сборка на Android 10 (360 dp) и Android 14 (412 dp), сайт — демо-сервер из `canasteCercaWeb` (секрет
-  `WEB_REPO_TOKEN`, только чтение). Тест оболочки `app/src/androidTest` (UiAutomator): запуск и «Saltar», «назад»
-  закрывает окно сайта, ссылки `canastacerca.com` с нуля и в открытом приложении, без сети — «Reintentar», «потянуть —
-  обновить», `CanastaApp.info()`, шрифт системы 1,3 и главная без прокрутки вбок. Потом — смоук QA из `qa/android/`
+  debug-сборка на Android 14 (412 dp; WebView 113) и Android 10 (WebView образа 74 — ниже минимума 105: там проверяется
+  экран «Actualizá Android System WebView», проверки сайта пропускаются), сайт — демо-сервер из `canasteCercaWeb`
+  (секрет `WEB_REPO_TOKEN`, только чтение). Тест оболочки `app/src/androidTest` (UiAutomator): запуск и «Saltar», «назад»
+  закрывает окно сайта, ссылки `canastacerca.com` с нуля и в открытом приложении, без сети — «Reintentar», сервер
+  принял соединение и молчит — через 30 с «Reintentar», «потянуть — обновить», `CanastaApp.info()` (с `fontScale`),
+  шрифт системы 1,3 и главная без прокрутки вбок на 412 и 360 dp, старый WebView — экран обновления. Потом — смоук QA из `qa/android/`
   сайта (Q124, Playwright для Android), если он там есть, и рядом — `tools/bridge_test.py`. В артефактах прогона —
   снимки, видео, logcat, вывод тестов и лог демо-сервера. Красный прогон нарочно: Actions → «Android — эмулятор» →
   Run workflow → `break_check`. Локально — `tools/ci/demo-server.sh <папка сайта>`, эмулятор, `./gradlew
@@ -156,7 +168,7 @@ build id Crashlytics). Отчёты шлёт только release; debug — н�
   прошло, что упало и какие кейсы без автотеста. Пока QA не отобрал кейсы для приложения (Q124), красными прогон не
   делают. Кейсы на базе дня (`snapshot`) в CI пропускаются: базы там нет.
 - **Мост против настоящего сайта** — `tools/bridge_test.py`: берёт JS моста прямо из `MainActivity.kt` и прогоняет сайт
-  в демо-режиме в Chrome с экраном телефона и без `navigator.share`, как в WebView. 28 проверок: `appInfo()`,
+  в демо-режиме в Chrome с экраном телефона и без `navigator.share`, как в WebView. 29 проверок: `appInfo()`, `fontScale`,
   `X-CC-Client`, `pl: 'android'`, «Compartir» текстом и картинкой, `haptic()`, «назад» закрывает панель,
   «потянуть — обновить» (`PULL_OK`: наверху — да; с открытой панелью, не наверху, на карусели — нет),
   `window.open` → WhatsApp, ширина страниц 390 px, ошибки JS, сверка версии сайта (на 6 страницах без ложной
@@ -169,11 +181,14 @@ build id Crashlytics). Отчёты шлёт только release; debug — н�
 - **На телефоне** (QA, `docs/specs/mobile.md` §6): первый запуск — Firu, потом сайт; строка состояния синяя;
   «назад» закрывает панели; «Escanear» — камера; «Mi ubicación»; «Compartir canasta» и «Compartir mi ahorro» — меню
   телефона; «Cómo llegar» — Карты; в режиме полёта — экран с Firu и «Reintentar» (в release — без поля для ссылки);
-  наверху страницы потянуть вниз — круг и перезагрузка, на карусели и с открытой панелью — нет; «Agregar» — лёгкий отклик.
+  наверху страницы потянуть вниз — круг и перезагрузка, на карусели и с открытой панелью — нет; «Agregar» — лёгкий отклик;
+  страница увеличивается двумя пальцами; с крупным шрифтом в настройках телефона (со второго открытия) — подсказка
+  «Letra grande»; иконка — Firu без очков (обычная и тематическая на Android 13+).
 
 ## Сборка
 
 Один модуль `:app`: AGP 9.2.1 (Kotlin встроенный), Gradle 9.6, compileSdk и targetSdk 36 (Play требует 36 для новых
 приложений), minSdk 26; зависимости — `androidx.activity`, `androidx.core`, `androidx.webkit`,
-`androidx.swiperefreshlayout` (с 0.3.2); Firebase Crashlytics — только с `app/google-services.json` (раздел выше). Код — `app/src/main/kotlin/ar/canastacerca/MainActivity.kt`
+`androidx.swiperefreshlayout` (с 0.3.2); иконка — `res/drawable/ic_launcher_foreground.xml` и
+`ic_launcher_monochrome.xml` из `design/mascot/firu-icon.svg` сайта (Firu без очков, 0.3.5); Firebase Crashlytics — только с `app/google-services.json` (раздел выше). Код — `app/src/main/kotlin/ar/canastacerca/MainActivity.kt`
 и `SitePull.kt` («потянуть — обновить»), экран — `app/src/main/res/layout/activity_main.xml`.

@@ -27,7 +27,8 @@ raw = textwrap.dedent(raw).strip('\n')
 gradle = open(os.path.join(os.path.dirname(os.path.abspath(KT)), *(['..'] * 5), 'build.gradle.kts'), encoding='utf-8').read()
 version_name = re.search(r'versionName = "([^"]+)"', gradle).group(1)
 version_code = re.search(r'versionCode = (\d+)', gradle).group(1)
-info = json.dumps({'platform': 'android', 'version': f'{version_name}+{version_code}', 'push': 'off'}, separators=(',', ':'))
+# Как JSONObject в Kotlin: fontScale 1.0 → «1» (обычный шрифт телефона; T5)
+info = json.dumps({'platform': 'android', 'version': f'{version_name}+{version_code}', 'push': 'off', 'fontScale': 1}, separators=(',', ':'))
 native = re.search(r'const val NATIVE = "(\w+)"', src).group(1)
 
 
@@ -109,6 +110,9 @@ with sync_playwright() as p:
     a = page.evaluate('appInfo()')
     check('сайт видит приложение: appInfo()', a and a.get('platform') == 'android' and a.get('version') == f'{version_name}+{version_code}', json.dumps(a))
     check('inApp() === true', page.evaluate('inApp()'))
+    fs = page.evaluate("JSON.parse(CanastaApp.info()).fontScale")
+    site_fs = page.evaluate("typeof fontAppScale === 'function' ? fontAppScale() : 'нет fontAppScale'")
+    check('info().fontScale — число, сайт его читает (T5, «Letra grande»)', fs == 1 and site_fs == 1, f'info: {fs}, сайт: {site_fs}')
     tags = [t for t in api_tags if t]
     check(f'X-CC-Client в запросах /api — android/{version_name}+{version_code} web/…', tags and all(t.startswith(f'android/{version_name}+{version_code} web/') for t in tags),
           f'{len(tags)} запросов, пример: {tags[0] if tags else None}')

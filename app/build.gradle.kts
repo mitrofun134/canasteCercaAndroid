@@ -37,11 +37,15 @@ android {
         applicationId = "ar.canastacerca"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 7
-        versionName = "0.3.4"
+        versionCode = 8
+        versionName = "0.3.5"
 
         // Тест оболочки на эмуляторе (T7): app/src/androidTest, запуск — tools/ci/emulator-run.sh
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Минимальная версия WebView (ГД 25.11, W329 п. 3): ниже сайт не работает — `?.`/`??` с Chrome 80, `:has()` и
+        // `@container` — со 105; приложение показывает «Actualizá Android System WebView». Тест оболочки — тот же порог
+        buildConfigField("int", "MIN_WEBVIEW", "105")
 
         // Ключ доступа: пока сайт закрыт (B80), сборки для тестеров и для проверки Google несут ключ
         buildConfigField("String", "CANASTA_ACCESS_KEY", "\"$accessKey\"")

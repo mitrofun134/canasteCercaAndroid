@@ -38,7 +38,7 @@ class DesignTest {
     @Test
     fun screens() {
         val major = WebViewCompat.getCurrentWebViewPackage(ctx)?.versionName?.substringBefore('.')?.toIntOrNull() ?: 0
-        assumeTrue("WebView $major: сайту нужен 80+", major >= 80)
+        assumeTrue("WebView $major: сайту нужен ${BuildConfig.MIN_WEBVIEW}+", major >= BuildConfig.MIN_WEBVIEW)
         val tag = InstrumentationRegistry.getArguments().getString("ccDesign") ?: ctx.resources.configuration.screenWidthDp.toString()
         val measure = instr.context.assets.open("design-measure.js").bufferedReader().use { it.readText() }
         val base = BuildConfig.CANASTA_BASE_URL.trimEnd('/')

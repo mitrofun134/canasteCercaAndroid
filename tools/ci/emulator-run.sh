@@ -11,6 +11,10 @@ set -uo pipefail
 OUT=${CC_OUT:?}
 APKS=${CC_APK_DIR:?}
 PKG=ar.canastacerca
+# Минимальный WebView для сайта — как BuildConfig.MIN_WEBVIEW в app/build.gradle.kts (ГД 25.11): ниже приложение
+# показывает «Actualizá Android System WebView», и проверки сайта пропускаются
+MIN_WV=$(sed -n 's/.*"MIN_WEBVIEW", "\([0-9]*\)".*/\1/p' "$(dirname "$0")/../../app/build.gradle.kts")
+MIN_WV=${MIN_WV:-105}
 DEV_SHOTS=/sdcard/Download/cc-ci
 mkdir -p "$OUT/shots" "$OUT/video"
 fail=0
@@ -42,8 +46,8 @@ adb shell settings put system font_scale 1.0
 # Версия Android и WebView — отметкой на странице прогона (видно без входа в GitHub)
 WV=$(adb shell dumpsys webviewupdate 2>/dev/null | tr -d '\r' | grep -m1 -i "current webview package" | sed 's/.*: *//')
 WV_MAJOR=$(echo "$WV" | sed -n 's/.*, *\([0-9]*\)\..*/\1/p')
-if [ -n "$WV_MAJOR" ] && [ "$WV_MAJOR" -lt 80 ]; then
-  echo "::warning title=$(prop "${CC_NAME:-Эмулятор}") · старый WebView::WebView $WV_MAJOR: скрипты сайта (app.js — «??» и «?.») работают с Chrome 80 — сайт тут не запускается; проверки, которым нужен сайт целиком, пропускаются"
+if [ -n "$WV_MAJOR" ] && [ "$WV_MAJOR" -lt "$MIN_WV" ]; then
+  echo "::notice title=$(prop "${CC_NAME:-Эмулятор}") · старый WebView::WebView $WV_MAJOR (сайту нужен $MIN_WV+): приложение показывает экран «Actualizá Android System WebView» — его и проверяем (t09); проверки сайта пропускаются"
 fi
 echo "::notice title=$(prop "${CC_NAME:-Эмулятор}")::Android $(adb shell getprop ro.build.version.release | tr -d '\r') (API $(adb shell getprop ro.build.version.sdk | tr -d '\r')), WebView ${WV:-?}"
 
@@ -93,9 +97,9 @@ else
 fi
 
 # Дизайн (D96): снимки и замер 12 экранов — DesignTest, на двух ширинах (плотность 420 → 412 dp, 480 → 360 dp).
-# Только на WebView 80+ (на старом сайт не работает). Прогон не роняет
+# Только на WebView $MIN_WV+ (на старом приложение сайт не открывает). Прогон не роняет
 if [ "$fail" = 0 ] || [ -s "$OUT/shell-test.txt" ]; then
-  if [ "${WV_MAJOR:-0}" -ge 80 ]; then
+  if [ "${WV_MAJOR:-0}" -ge "$MIN_WV" ]; then
     for d in 420:412 480:360; do
       dp=${d##*:}
       adb shell wm density "${d%%:*}" >/dev/null
@@ -116,11 +120,11 @@ if [ "$fail" = 0 ] || [ -s "$OUT/shell-test.txt" ]; then
     done
     if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY" >/dev/null; fi
   else
-    echo "== Дизайн: пропуск — WebView ${WV_MAJOR:-?}, сайт на нём не работает"
+    echo "== Дизайн: пропуск — WebView ${WV_MAJOR:-?}, сайту нужен $MIN_WV+"
   fi
 fi
 
-if [ -d "${CC_WEB:-}/qa/android" ] && ls "$CC_WEB"/qa/android/*.test.js >/dev/null 2>&1; then
+if [ "${WV_MAJOR:-0}" -ge "$MIN_WV" ] && [ -d "${CC_WEB:-}/qa/android" ] && ls "$CC_WEB"/qa/android/*.test.js >/dev/null 2>&1; then
   echo "== Смоук QA (qa/android, Q124)"
   mkdir -p "$OUT/qa"
   (

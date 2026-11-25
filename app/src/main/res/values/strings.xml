@@ -18,4 +18,7 @@
     <string name="update_title">Actualizá la app</string>
     <string name="update_hint">Hay una versión nueva de Canasta Cerca. Para seguir comparando precios, actualizala en Google Play.</string>
     <string name="update_button">Actualizar</string>
+    <!-- WebView телефона ниже BuildConfig.MIN_WEBVIEW (ГД 25.11): %1$s — имя из телефона, обычно «Android System WebView» -->
+    <string name="webview_title">Actualizá %1$s</string>
+    <string name="webview_hint">Para abrir Canasta Cerca, el teléfono necesita una versión más nueva de %1$s. Actualizala gratis en Google Play y volvé a la app.</string>
 </resources>
