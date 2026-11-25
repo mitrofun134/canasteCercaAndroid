@@ -53,6 +53,7 @@ PULL_OK = kconst('PULL_OK')
 PAGE_ASSETS = kconst('PAGE_ASSETS')
 CAN_RELOAD = kconst('CAN_RELOAD')
 FRESH_RELOAD = kconst('FRESH_RELOAD')
+SETTLED = kconst('SETTLED')
 # Регулярка SITE_ASSET из Kotlin: в Kotlin-строке \\ → \, \" → "
 SITE_ASSET = re.compile(json.loads('"' + re.search(r'val SITE_ASSET = Regex\("((?:[^"\\]|\\.)*)"\)', src).group(1) + '"'))
 
@@ -256,6 +257,30 @@ with sync_playwright() as p:
     page.wait_for_timeout(500)
     left = page.evaluate("caches.open('cc-test').then(c => c.keys()).then(rs => rs.map(r => new URL(r.url).pathname + new URL(r.url).search).sort())")
     check('свежая перезагрузка: из кэша сайта убраны страницы, файлы и данные остались', left == ['/api/config', '/img/x.png', '/style.css?v=1'], json.dumps(left))
+
+    # Перезагрузка под снимком (freshReload): SETTLED — «сайт дорисовался». Во время заглушек — нет, потом — да
+    settled = {}
+    # /recetas нет: в демо цены блюд не считаются (server.js: «no están en modo demo») и заглушки цены остаются навсегда —
+    # снимок тогда уходит по таймауту 3 с; на проде цены приходят
+    for path in ['/', '/catalogo', '/descuentos', '/canasta', '/ahorro']:
+        page.goto(BASE + path, wait_until='networkidle')
+        page.wait_for_timeout(1500)
+        settled[path] = page.evaluate(SETTLED)
+    check('SETTLED: после загрузки на 5 страницах — да (снимок не висит до таймаута)', all(v is True for v in settled.values()), json.dumps(settled))
+    page.goto(BASE + '/', wait_until='networkidle')
+    page.wait_for_timeout(1000)
+    page.evaluate(FRESH_RELOAD)
+    seen = []
+    for _ in range(60):
+        try:
+            seen.append(page.evaluate(SETTLED))
+        except Exception:
+            seen.append(None)
+        if seen[-1] is True and False in seen:
+            break
+        page.wait_for_timeout(50)
+    check('SETTLED: сразу после перезагрузки — нет (заглушки), потом — да', False in seen and seen[-1] is True,
+          f'{len(seen)} опросов: ' + ''.join('·' if v is None else ('+' if v else '-') for v in seen))
 
     # Флаг app.flags.share = false (§3.6): в мосте нет share — сайт делает «Compartir» как в браузере
     ctx2 = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True,

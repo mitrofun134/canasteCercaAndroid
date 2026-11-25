@@ -26,10 +26,28 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <WebView
-            android:id="@+id/web"
+        <FrameLayout
+            android:id="@+id/web_holder"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent">
+
+            <WebView
+                android:id="@+id/web"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- Снимок страницы на время перезагрузки (MainActivity.freshReload): заглушки и промежуточный вид сайта
+                 не мелькают, круг «потянуть — обновить» крутится поверх (ГД 23.11) -->
+            <ImageView
+                android:id="@+id/freeze"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clickable="true"
+                android:focusable="false"
+                android:importantForAccessibility="no"
+                android:scaleType="fitXY"
+                android:visibility="gone" />
+        </FrameLayout>
     </ar.canastacerca.SitePull>
 
     <!-- Пока сайт не нарисовал первый кадр: Firu вместо белого экрана -->

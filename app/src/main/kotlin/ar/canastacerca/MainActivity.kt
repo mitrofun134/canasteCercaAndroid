@@ -6,7 +6,9 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -14,6 +16,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -29,6 +33,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -47,6 +52,8 @@ import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import androidx.webkit.WebViewRenderProcess
+import androidx.webkit.WebViewRenderProcessClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -75,6 +82,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var errorDetail: TextView
     private lateinit var serverInput: EditText
     private lateinit var updatePanel: View
+    private lateinit var freeze: ImageView
 
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
@@ -101,6 +109,30 @@ class MainActivity : ComponentActivity() {
 
     /** Процесс сайта (renderer WebView) умер: этот WebView больше трогать нельзя, экран пересоздаётся. */
     private var webGone = false
+
+    /** Страница перезагружается под снимком (freshReload): ждём, пока сайт дорисуется (SETTLED). */
+    private var frozen = false
+    private var settleDeadline = 0L
+    private val settleCheck = Runnable { checkSettled() }
+    private val unfreezeLater = Runnable { unfreeze() }
+
+    /** Приложение на экране (между onStart и onStop). Свёрнутое обновляем сразу: его никто не видит. */
+    private var shown = false
+
+    /** Последнее касание экрана: на экране сайт перезагружаем только после IDLE_MS без касаний. */
+    private var lastTouch = 0L
+
+    /**
+     * Firu при запуске — пока скрипты сайта не выполнились (document.readyState ≠ loading), но не дольше SPLASH_MAX_MS
+     * после первого кадра. Раньше Firu уходил на первом кадре, а сайт к этому времени рисует сохранённую главную
+     * (cc-home-snap), которая ещё не нажимается: на слабом телефоне — секунды «зависшего» экрана.
+     */
+    private val readyCheck = Runnable { checkReady() }
+    private val splashTimeout = Runnable { hideSplash() }
+
+    /** Сайт не отвечает на касания (onRenderProcessUnresponsive): с какого сигнала; 0 — отвечает. */
+    private var unresponsiveSince = 0L
+    private var hangReported = false
 
     /** Раздел app из /api/config (§3.6), последний полученный: флаги и minVersion действуют и без сети. */
     private var appConfig = JSONObject()
@@ -157,6 +189,7 @@ class MainActivity : ComponentActivity() {
         errorDetail = findViewById(R.id.error_detail)
         serverInput = findViewById(R.id.server_input)
         updatePanel = findViewById(R.id.update)
+        freeze = findViewById(R.id.freeze)
 
         // Сайт — между строкой состояния и панелью навигации, а с открытой клавиатурой — над ней
         ViewCompat.setOnApplyWindowInsetsListener(findViewById<View>(R.id.root)) { _, insets ->
@@ -176,6 +209,7 @@ class MainActivity : ComponentActivity() {
         setUpErrorPanel()
         setUpUpdatePanel()
         installBridge()
+        watchRenderer()
         onBackPressedDispatcher.addCallback(this, back)
         applyAppConfig()
         fetchAppConfig()
@@ -217,6 +251,8 @@ class MainActivity : ComponentActivity() {
             // Чтобы сервер отличал приложение от браузера; сайт узнаёт себя в приложении по CanastaApp.info()
             userAgentString = "$userAgentString CanastaCercaAndroid/${BuildConfig.VERSION_NAME}"
         }
+        // Без «растягивания» страницы за край: у верха оно спорит с «потянуть — обновить» и страница дёргается (ГД 23.11)
+        web.overScrollMode = View.OVER_SCROLL_NEVER
         web.webViewClient = SiteClient()
         web.webChromeClient = SiteChromeClient()
     }
@@ -228,6 +264,7 @@ class MainActivity : ComponentActivity() {
     private fun setUpPull() {
         pull.setColorSchemeResources(R.color.canasta_celeste)
         pull.setProgressBackgroundColorSchemeResource(R.color.canasta_card)
+        pull.scrollTarget = web
         pull.onTouchDown = { x, y, gesture ->
             web.evaluateJavascript("$PULL_OK($x,$y)") { answer -> pull.answer(gesture, answer == "true") }
         }
@@ -238,7 +275,7 @@ class MainActivity : ComponentActivity() {
                     hideError()
                     web.reload()
                 }
-                else -> web.evaluateJavascript(FRESH_RELOAD, null)
+                else -> freshReload()
             }
         }
     }
@@ -373,14 +410,92 @@ class MainActivity : ComponentActivity() {
             errorDetail.visibility = View.GONE
         }
         progress.visibility = View.GONE
-        loading.visibility = View.GONE
-        pull.isRefreshing = false
+        hideSplash()
+        unfreeze()
         errorPanel.visibility = View.VISIBLE
     }
 
     private fun hideError() {
         errorShownFor = null
         errorPanel.visibility = View.GONE
+    }
+
+    /* ---------- Перезагрузка без мелькания ---------- */
+
+    /**
+     * «Потянуть — обновить» и обновление по версии: снимок экрана (PixelCopy) поверх WebView, под ним — FRESH_RELOAD.
+     * Так не видно промежуточных кадров: заглушек сайта, другой шапки, пустого нижнего меню (ГД 23.11: «всё дёргается,
+     * на доли секунды неопределённое состояние»). Снимок уходит, когда сайт дорисовался (checkSettled), но не позже 10 с.
+     * auto — обновление по версии: с кругом сверху, чтобы было видно, почему пару секунд экран не нажимается.
+     */
+    private fun freshReload(auto: Boolean = false) {
+        if (webGone) return
+        if (auto) pull.isRefreshing = true
+        val w = web.width
+        val h = web.height
+        if (frozen || w == 0 || h == 0) {
+            web.evaluateJavascript(FRESH_RELOAD, null)
+            return
+        }
+        val shot = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val at = IntArray(2)
+        web.getLocationInWindow(at)
+        val reload = { if (!webGone) web.evaluateJavascript(FRESH_RELOAD, null) }
+        try {
+            PixelCopy.request(window, Rect(at[0], at[1], at[0] + w, at[1] + h), shot, { result ->
+                if (result == PixelCopy.SUCCESS && !webGone && !isDestroyed) {
+                    freeze.animate().cancel()
+                    freeze.setImageBitmap(shot)
+                    freeze.alpha = 1f
+                    freeze.visibility = View.VISIBLE
+                    frozen = true
+                    main.removeCallbacks(unfreezeLater)
+                    main.postDelayed(unfreezeLater, 10_000L)
+                }
+                reload()
+            }, main)
+        } catch (e: IllegalArgumentException) {
+            reload()
+        }
+    }
+
+    /** Дорисовался ли сайт (SETTLED): да — убираем снимок чуть позже (догорят появления), нет — спросим через 100 мс. */
+    private fun checkSettled() {
+        if (!frozen) return
+        if (webGone || SystemClock.elapsedRealtime() > settleDeadline) {
+            unfreeze()
+            return
+        }
+        web.evaluateJavascript(SETTLED) { ok ->
+            if (ok == "true") main.postDelayed(unfreezeLater, 150L) else main.postDelayed(settleCheck, 100L)
+        }
+    }
+
+    /** Снимок — плавно прочь (150 мс), круг «потянуть — обновить» — тоже. */
+    private fun unfreeze() {
+        main.removeCallbacks(settleCheck)
+        main.removeCallbacks(unfreezeLater)
+        pull.isRefreshing = false
+        if (!frozen) return
+        frozen = false
+        freeze.animate().alpha(0f).setDuration(150L).withEndAction {
+            freeze.visibility = View.GONE
+            freeze.setImageDrawable(null)
+        }.start()
+    }
+
+    /** Скрипты сайта выполнились (readyState ≠ loading) — Firu прочь; нет — спросим через 100 мс. */
+    private fun checkReady() {
+        if (webGone || loading.visibility != View.VISIBLE) return
+        web.evaluateJavascript("document.readyState") { state ->
+            if (state != "\"loading\"") hideSplash() else main.postDelayed(readyCheck, 100L)
+        }
+    }
+
+    private fun hideSplash() {
+        main.removeCallbacks(readyCheck)
+        main.removeCallbacks(splashTimeout)
+        loading.visibility = View.GONE
     }
 
     /* ---------- Флаги и обязательное обновление (docs/specs/mobile.md §3.6) ---------- */
@@ -465,16 +580,31 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
-    /** Перезагрузка, когда человек ничего не делает: нет открытой панели и курсора в поле; иначе — через минуту. */
+    /**
+     * Новая версия сайта — незаметно. Свёрнутое приложение — сразу: экран никто не видит. На экране — когда человек
+     * IDLE_MS ничего не трогал, нет открытой панели и курсора в поле; иначе — позже (или когда свернёт). Сразу после
+     * возврата в приложение не перезагружаем: тестер 24.11 — «свернула, открыла — подвисло, ничего не нажимается».
+     */
     private fun reloadWhenSafe() {
         main.removeCallbacks(retryReload)
-        if (webGone) return
+        if (webGone || !reloadPending) return
+        if (!shown) {
+            reloadPending = false
+            web.evaluateJavascript(FRESH_RELOAD, null)
+            return
+        }
+        val idle = SystemClock.elapsedRealtime() - lastTouch
+        if (idle < IDLE_MS) {
+            main.postDelayed(retryReload, IDLE_MS - idle + 500L)
+            return
+        }
         web.evaluateJavascript(CAN_RELOAD) { ok ->
-            if (ok == "true") {
+            if (webGone || !reloadPending) return@evaluateJavascript
+            if (ok == "true" && shown && SystemClock.elapsedRealtime() - lastTouch >= IDLE_MS) {
                 reloadPending = false
-                web.evaluateJavascript(FRESH_RELOAD, null)
+                freshReload(auto = true)
             } else {
-                main.postDelayed(retryReload, 60_000L)
+                main.postDelayed(retryReload, if (ok == "true") 5_000L else 60_000L)
             }
         }
     }
@@ -574,6 +704,40 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Ошибка без падения — в Crashlytics, если он есть в сборке (app/google-services.json); иначе ничего. */
+    /**
+     * Сайт завис (тестер 24.11: «открыла — подвисло, ничего не нажимается»). WebView сообщает, что процесс сайта не
+     * отвечает на касания: первый раз — через ~5 с, дальше — каждые 5 с. Первый раз пишем в Crashlytics, на какой
+     * странице. Не отошёл ещё HANG_KILL_MS, а приложение на экране, — завершаем процесс сайта: onRenderProcessGone
+     * открывает экран заново. Второй раз за 2 минуты не завершаем — чтобы не крутиться по кругу.
+     */
+    private fun watchRenderer() {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_VIEW_RENDERER_CLIENT_BASIC_USAGE)) return
+        WebViewCompat.setWebViewRenderProcessClient(web, object : WebViewRenderProcessClient() {
+            override fun onRenderProcessUnresponsive(view: WebView, renderer: WebViewRenderProcess?) {
+                val now = SystemClock.elapsedRealtime()
+                val path = view.url?.let { Uri.parse(it).path }.orEmpty()
+                if (unresponsiveSince == 0L) {
+                    unresponsiveSince = now
+                    if (!hangReported) {
+                        hangReported = true
+                        reportNonFatal(IllegalStateException("WebView: сайт не отвечает 5 с ($path, на экране: $shown)"))
+                    }
+                    return
+                }
+                if (webGone || !shown || renderer == null) return
+                if (now - unresponsiveSince < HANG_KILL_MS || now - lastHangKill < 120_000L) return
+                if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_VIEW_RENDERER_TERMINATE)) return
+                lastHangKill = now
+                reportNonFatal(IllegalStateException("WebView: сайт завис, процесс сайта завершён ($path)"))
+                renderer.terminate()
+            }
+
+            override fun onRenderProcessResponsive(view: WebView, renderer: WebViewRenderProcess?) {
+                unresponsiveSince = 0L
+            }
+        })
+    }
+
     private fun reportNonFatal(e: Throwable) {
         if (!BuildConfig.CRASHLYTICS) return
         runCatching {
@@ -718,19 +882,31 @@ class MainActivity : ComponentActivity() {
             pageReady = false
         }
 
-        // Первый кадр сайта нарисован — убираем Firu
+        // Первый кадр сайта нарисован. Firu уйдёт, когда скрипты сайта выполнятся (checkReady), — до этого не нажимается
         override fun onPageCommitVisible(view: WebView, url: String?) {
-            loading.visibility = View.GONE
-            pull.isRefreshing = false
+            if (loading.visibility == View.VISIBLE) {
+                main.removeCallbacks(readyCheck)
+                main.removeCallbacks(splashTimeout)
+                main.post(readyCheck)
+                main.postDelayed(splashTimeout, SPLASH_MAX_MS)
+            }
+            if (!frozen) pull.isRefreshing = false
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             view.evaluateJavascript(OPEN_IN_PLACE, null)
-            pull.isRefreshing = false
             val ok = url != errorShownFor
+            if (frozen && ok) {
+                // Сайт загрузился — снимок уберём, когда он дорисуется (без заглушек), но не позже чем через 3 с
+                settleDeadline = SystemClock.elapsedRealtime() + 3_000L
+                main.removeCallbacks(settleCheck)
+                main.post(settleCheck)
+            } else if (!frozen) {
+                pull.isRefreshing = false
+            }
             if (ok) {
                 hideError()
-                loading.visibility = View.GONE
+                hideSplash()
             }
             // Страница могла прийти из кэша сайта (service worker) — сверим версию с сервером, но не чаще раза в минуту
             pageReady = ok
@@ -775,7 +951,7 @@ class MainActivity : ComponentActivity() {
             progress.progress = newProgress
             // Пока крутится круг «потянуть — обновить», полоска сверху не нужна
             progress.visibility =
-                if (newProgress < 100 && errorShownFor == null && !pull.isRefreshing) View.VISIBLE else View.GONE
+                if (newProgress < 100 && errorShownFor == null && !pull.isRefreshing && !frozen) View.VISIBLE else View.GONE
         }
 
         // «Mi ubicación» — только нашему сайту. Браузерная геолокация работает только по https (и на localhost)
@@ -817,15 +993,21 @@ class MainActivity : ComponentActivity() {
         if (!webGone) web.saveState(outState)
     }
 
+    override fun onStart() {
+        super.onStart()
+        shown = true
+    }
+
     /**
      * Android держит приложение в памяти сутками, и значок возвращает ту же страницу. Поэтому при возврате (если
      * с прошлой сверки прошло больше RESUME_CHECK_MS) и раз в CHECK_EVERY_MS, пока приложение открыто, сверяем версию
-     * сайта; отложенную перезагрузку — делаем сейчас.
+     * сайта. Перезагружаем не сразу: человек только что вернулся и сейчас будет нажимать (reloadWhenSafe).
      */
     override fun onResume() {
         super.onResume()
         if (webGone) return
         web.onResume()
+        lastTouch = SystemClock.elapsedRealtime()
         if (reloadPending) reloadWhenSafe()
         else if (SystemClock.elapsedRealtime() - lastCheck > RESUME_CHECK_MS) checkSiteVersion()
         main.removeCallbacks(periodicCheck)
@@ -838,6 +1020,21 @@ class MainActivity : ComponentActivity() {
         if (!webGone) web.onPause()
         CookieManager.getInstance().flush()
         super.onPause()
+    }
+
+    /** Свернули: новую версию сайта загружаем сейчас, пока экран никто не видит; сверяем, если пора. */
+    override fun onStop() {
+        shown = false
+        if (!webGone && !isFinishing) {
+            if (reloadPending) reloadWhenSafe()
+            else if (SystemClock.elapsedRealtime() - lastCheck > RESUME_CHECK_MS) checkSiteVersion()
+        }
+        super.onStop()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) lastTouch = SystemClock.elapsedRealtime()
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onDestroy() {
@@ -855,6 +1052,18 @@ class MainActivity : ComponentActivity() {
 
         /** Когда в прошлый раз умер процесс сайта (onRenderProcessGone): второй раз подряд — не пересоздаём экран. */
         var lastRendererGone = 0L
+
+        /** Когда в прошлый раз завершали зависший процесс сайта (watchRenderer): второй раз за 2 минуты — нет. */
+        var lastHangKill = 0L
+
+        /** На экране сайт перезагружаем по версии только после стольких мс без касаний (тестер 24.11). */
+        const val IDLE_MS = 30_000L
+
+        /** Firu при запуске — не дольше стольких мс после первого кадра сайта. */
+        const val SPLASH_MAX_MS = 8_000L
+
+        /** Сайт не отвечает ещё столько после первого сигнала (~5 с) — завершаем его процесс. */
+        const val HANG_KILL_MS = 10_000L
 
         /** Как часто, пока приложение открыто, сверяем версию сайта с сервером (ГД 22.11: раз в полчаса). */
         const val CHECK_EVERY_MS = 30 * 60 * 1000L
@@ -893,6 +1102,16 @@ class MainActivity : ComponentActivity() {
         const val PAGE_ASSETS =
             "[].map.call(document.querySelectorAll('[src*=\"?v=\"],[href*=\"?v=\"]')," +
                 "function(e){return e.getAttribute('src')||e.getAttribute('href');})"
+
+        /**
+         * Сайт дорисовался после загрузки: документ загружен, и на экране нет заглушек (класс *skel*) и aria-busy="true".
+         * Только видимые на экране: скрытые разделы сайта держат свои заглушки в DOM.
+         */
+        const val SETTLED =
+            "(function(){if(document.readyState!=='complete')return false;" +
+                "var n=document.querySelectorAll('[class*=\"skel\"],[aria-busy=\"true\"]'),h=innerHeight;" +
+                "for(var i=0;i<n.length;i++){var r=n[i].getBoundingClientRect();" +
+                "if(r.width>0&&r.height>0&&r.bottom>0&&r.top<h)return false;}return true;})()"
 
         /** Можно ли перезагрузить сейчас: нет открытой панели (<dialog>) и курсора в поле ввода. */
         const val CAN_RELOAD =

@@ -3,6 +3,7 @@ package ar.canastacerca
 import android.content.Context
 import android.util.AttributeSet
 import android.view.MotionEvent
+import android.view.View
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
 /**
@@ -17,6 +18,9 @@ class SitePull @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     /** Начало касания: x, y — в CSS px страницы; gesture — номер касания, его же вернуть в answer(). */
     var onTouchDown: ((x: Float, y: Float, gesture: Int) -> Unit)? = null
 
+    /** Что листается (WebView): прямой ребёнок — контейнер со снимком страницы, сам он не листается. */
+    var scrollTarget: View? = null
+
     private var gesture = 0
     private var allowed = false
 
@@ -25,7 +29,7 @@ class SitePull @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     init {
         setOnChildScrollUpCallback { _, child ->
-            child?.canScrollVertically(-1) == true || (!inDown && !allowed)
+            (scrollTarget ?: child)?.canScrollVertically(-1) == true || (!inDown && !allowed)
         }
     }
 

@@ -37,8 +37,8 @@ android {
         applicationId = "ar.canastacerca"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 6
-        versionName = "0.3.3"
+        versionCode = 7
+        versionName = "0.3.4"
 
         // Ключ доступа: пока сайт закрыт (B80), сборки для тестеров и для проверки Google несут ключ
         buildConfigField("String", "CANASTA_ACCESS_KEY", "\"$accessKey\"")
