@@ -72,7 +72,7 @@ if [ "$fail" = 0 ]; then
   echo "== Тест оболочки (app/src/androidTest)"
   ARGS=()
   if [ "${CC_BREAK:-}" = "true" ]; then ARGS=(-e ccBreak 1); fi
-  adb shell am instrument -w -r "${ARGS[@]}" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" | tr -d '\r' >"$OUT/shell-test.txt"
+  adb shell am instrument -w -r -e class "$PKG.ShellTest" "${ARGS[@]}" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" | tr -d '\r' >"$OUT/shell-test.txt"
   # Каждая проверка: имя, итог, первая строка ошибки (stack=…)
   awk '/^INSTRUMENTATION_STATUS: test=/{t=substr($0,30)} /^INSTRUMENTATION_STATUS: stack=/{m=substr($0,31)}
     /^INSTRUMENTATION_STATUS_CODE: /{c=$2; if(t!=""&&c!=1){s=(c==0?"ok":(c==-3||c==-4)?"пропущена":"УПАЛА");
@@ -90,6 +90,28 @@ if [ "$fail" = 0 ]; then
   fi
 else
   gherr "${CC_NAME:-Эмулятор} · приложение не установилось" "adb install — см. лог шага"
+fi
+
+# Дизайн (D96): снимки и замер 12 экранов — DesignTest, на двух ширинах (плотность 420 → 412 dp, 480 → 360 dp).
+# Только на WebView 80+ (на старом сайт не работает). Прогон не роняет
+if [ "$fail" = 0 ] || [ -s "$OUT/shell-test.txt" ]; then
+  if [ "${WV_MAJOR:-0}" -ge 80 ]; then
+    for d in 420:412 480:360; do
+      dp=${d##*:}
+      adb shell wm density "${d%%:*}" >/dev/null
+      adb shell rm -rf /sdcard/Download/cc-design >/dev/null 2>&1
+      sleep 2
+      echo "== Дизайн: ${dp} dp"
+      adb shell am instrument -w -r -e class "$PKG.DesignTest" -e ccDesign "$dp" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" |
+        tr -d '\r' >"$OUT/design-$dp.txt"
+      mkdir -p "$OUT/design/android-$dp"
+      adb pull /sdcard/Download/cc-design/. "$OUT/design/android-$dp/" >/dev/null 2>&1
+      node "$(dirname "$0")/design/report.js" "$OUT/design-$dp.txt" "$OUT/design/android-$dp" "${CC_NAME%%,*}, $dp dp" || true
+    done
+    if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY" >/dev/null; fi
+  else
+    echo "== Дизайн: пропуск — WebView ${WV_MAJOR:-?}, сайт на нём не работает"
+  fi
 fi
 
 if [ -d "${CC_WEB:-}/qa/android" ] && ls "$CC_WEB"/qa/android/*.test.js >/dev/null 2>&1; then

@@ -1,12 +1,11 @@
-'use strict';
-// Замер экрана для дизайнера (T7): выполняется на странице (page.evaluate), страница — сайт в WebView приложения.
+// Замер экрана для дизайнера (T7, D96): DesignTest выполняет это на странице (evaluateJavascript) — сайт в WebView приложения.
 // Правила — из design/specs сайта:
 //   MOVIL-REPASO.md — текста меньше 12 px нет (кроме логотипов), размеров шрифта на странице не больше 7, начертаний
 //                     500 и 900 нет, обрезанного текста нет, боковой отступ 16 px;
 //   ESPACIO.md §7, MOVIL-COMPACTO.md §12 (D60) — нажимаемое от 44 px;
 //   ESPACIO.md — закреплённое (шапка, полосы, меню) на телефоне не больше 40 % первого экрана и 18 % после прокрутки.
 // Считается первые три экрана страницы. Возвращает числа и примеры — без оценок «хорошо/плохо» (их ставит report).
-module.exports = function measure() {
+(function measure() {
   const W = innerWidth;
   const vh = innerHeight;
   const LIM = 3 * vh;
@@ -125,4 +124,4 @@ module.exports = function measure() {
     right: right === Infinity ? null : Math.round(right),
     fixedTop: fixedShare(),
   };
-};
+})();

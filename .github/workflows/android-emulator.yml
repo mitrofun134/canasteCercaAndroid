@@ -134,6 +134,14 @@ jobs:
           name: emulator-${{ matrix.slug }}
           path: ci-out
           retention-days: 14
+      # Для дизайнера отдельно (D96): снимки и замер на 412 и 360 dp, index.html; на Mac — tools/ci/design-pull.command
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: design-${{ matrix.slug }}
+          path: ci-out/design
+          retention-days: 30
+          if-no-files-found: ignore
 
   # Тест-кейсы QA P0/P1 (qa/TEST-CASES.md сайта, ГД 25.11). Пока QA не отобрал, какие кейсы имеют смысл в приложении
   # (Q124), эти два задания показывают итог, но не делают прогон красным (continue-on-error).
@@ -165,7 +173,7 @@ jobs:
           retention-days: 14
 
   qa-app:
-    name: QA P0/P1 и дизайн в приложении — Android 14
+    name: QA P0/P1 в приложении — Android 14, 412 dp
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -221,11 +229,3 @@ jobs:
           name: qa-app-android14
           path: ci-out
           retention-days: 14
-      # Для дизайнера отдельно (D96): снимки и замер на 412 и 360 dp, index.html; на Mac — tools/ci/design-pull.command
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: design-android14
-          path: ci-out/design
-          retention-days: 30
-          if-no-files-found: ignore

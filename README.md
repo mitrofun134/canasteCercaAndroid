@@ -143,6 +143,11 @@ build id Crashlytics). Отчёты шлёт только release; debug — н�
   снимки, видео, logcat, вывод тестов и лог демо-сервера. Красный прогон нарочно: Actions → «Android — эмулятор» →
   Run workflow → `break_check`. Локально — `tools/ci/demo-server.sh <папка сайта>`, эмулятор, `./gradlew
   installDebug installDebugAndroidTest` и `CC_OUT=… CC_APK_DIR=app/build/outputs/apk bash tools/ci/emulator-run.sh`.
+- **Снимки для дизайнера** (D96, ГД 25.11) — в задании Android 14 после теста оболочки: `app/src/androidTest/…/DesignTest.kt`
+  открывает 12 экранов сайта в приложении на 412 и 360 dp, снимает первый экран и после прокрутки и замеряет по правилам
+  `design/specs` сайта (`assets/design-measure.js`: текст от 12 px, не больше 7 размеров, без 500 и 900, нажимаемое от
+  44 px, обрезанный текст, закреплённое ≤ 40 % / 18 %). `tools/ci/design/report.js` — `index.html`, отметка «Дизайн» на
+  странице прогона, таблица в сводке; артефакт `design-android14-412`. На Mac — `tools/ci/design-pull.command`.
 - **Тест-кейсы QA P0/P1 в CI** (ГД 25.11) — в том же workflow, два задания. Кейсы — строки `qa/TEST-CASES.md` сайта
   с P0 или P1 (`tools/ci/qa/cases.js`), автотесты — те же, что у QA, по номеру кейса в имени. «UI» и «e2e» — внутри
   приложения на эмуляторе Android 14: `tools/ci/qa/android-preload.js` подменяет `launch`, `openPage` и `start` из

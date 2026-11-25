@@ -38,14 +38,6 @@ REC=$!
 PATTERN=$(CC_OUT="$OUT" node "$HERE/cases.js" "$WEB/qa/TEST-CASES.md" ui)
 (cd "$WEB" && npm i --no-save --no-audit --no-fund playwright >/dev/null 2>&1) || echo "::warning::npm i playwright не прошёл"
 
-# Дизайн (D96): снимки и замер экранов на двух ширинах — 412 dp (плотность 420) и 360 dp (480), прогон не роняет
-for d in 420:412 480:360; do
-  adb shell wm density "${d%%:*}" >/dev/null
-  sleep 2
-  echo "== Дизайн: ${d##*:} dp"
-  CC_NAME="Android 14, ${d##*:} dp" CC_DESIGN_DIR="$OUT/design/android14-${d##*:}" node "$HERE/../design/shots.js" || true
-done
-if [ -n "${CC_DENSITY:-}" ]; then adb shell wm density "$CC_DENSITY" >/dev/null; fi
 (
   cd "$WEB" &&
     CC_WEB="$WEB" QA_ANDROID=1 QA_ANDROID_PKG=$PKG QA_BASE=http://10.0.2.2:3000 \
