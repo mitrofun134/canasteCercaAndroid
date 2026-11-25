@@ -131,7 +131,16 @@ async function main() {
   const withIssues = results.filter((r) => r.bad.length).length;
   const line = `${NAME}: ${results.length} экранов, замечания по правилам design/specs — на ${withIssues}`;
   console.log(`\n== ${line}`);
-  if (process.env.GITHUB_ACTIONS) console.log(`::notice title=Дизайн · ${NAME.replace(/,/g, '%2C')}::${line}. Снимки — артефакт «design» этого задания`);
+  if (process.env.GITHUB_ACTIONS) {
+    // Одной отметкой — по строке на экран: сводку прогона без входа в GitHub не видно, отметки — видно
+    const lines = results.map((r) => {
+      const m = r.m || {};
+      const ex = [...(m.small || []).slice(0, 2), ...(m.smallTargets || []).slice(0, 2), ...(m.clipped || []).slice(0, 1)];
+      return `${r.path} — ${r.bad.join('; ') || 'ок'}${ex.length ? ` (напр.: ${ex.join('; ')})` : ''}`;
+    });
+    const text = `${line}. Снимки и index.html — артефакт design-…\n${lines.join('\n')}`.slice(0, 6000);
+    console.log(`::notice title=Дизайн · ${NAME.replace(/%/g, '%25').replace(/,/g, '%2C').replace(/:/g, '%3A')}::${text.replace(/%/g, '%25').replace(/\n/g, '%0A')}`);
+  }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const cell = (x) => String(x).replace(/\|/g, '\\|');
     let md = `### Дизайн — ${NAME}\n\n${line}. Снимки и замер — в артефакте задания (папка design, index.html).\n\n| Экран | Ширина | Размеры шрифта | Замечания |\n|---|---|---|---|\n`;

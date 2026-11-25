@@ -65,6 +65,31 @@ class ShellTest {
         device.executeShellCommand("settings put system font_scale 1.0")
     }
 
+    /**
+     * 0. Первый запуск без сети — экран «No pudimos abrir…» с «Reintentar»; сеть вернулась — «Reintentar» открывает сайт.
+     * Идёт первым: после первой загрузки у сайта есть service worker, и без сети сайт отвечает сам (сохранённой
+     * страницей или своим «Sin conexión») — экран оболочки тогда не нужен. В CI приложение каждый раз ставится заново.
+     */
+    @Test
+    fun t00_offlineFirstStart() {
+        network(false)
+        val old = activity()
+        ctx.startActivity(
+            ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)!!
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+        )
+        waitActivity { it !== old }
+        val retry = device.wait(Until.findObject(By.text(ctx.getString(R.string.retry))), WAIT)
+        assertNotNull("без сети нет экрана с «Reintentar» (${appState()})", retry)
+        assertTrue("без сети нет заголовка «${ctx.getString(R.string.error_title)}»", device.hasObject(By.text(ctx.getString(R.string.error_title))))
+        shot("00-offline")
+        network(true)
+        device.findObject(By.text(ctx.getString(R.string.retry)))?.click()
+        waitJs(SITE_READY, "«Reintentar» не открыл сайт после возврата сети")
+        assertTrue("экран «нет сети» не ушёл", device.wait(Until.gone(By.text(ctx.getString(R.string.retry))), 5_000L) == true)
+        shot("00-online")
+    }
+
     /** 1. Запуск — сайт. Первый раз «Ofertas» из меню — лист «¿Con qué pagás?», «Saltar» его закрывает. */
     @Test
     fun t01_launchAndSkip() {
@@ -115,32 +140,6 @@ class ShellTest {
         link("https://canastacerca.com/recetas", cold = false)
         waitJs("location.pathname==='/recetas'&&document.readyState==='complete'", "ссылка /recetas не открылась в открытом приложении")
         shot("03-link-warm")
-    }
-
-    /** 4. Без сети — экран «No pudimos abrir…» с «Reintentar»; сеть вернулась — «Reintentar» открывает сайт. */
-    @Test
-    fun t04_offlineAndRetry() {
-        launch()
-        // Без service worker сайта: иначе он сам покажет сохранённую страницу, и до экрана оболочки дело не дойдёт
-        js(
-            "(function(){if(navigator.serviceWorker)navigator.serviceWorker.getRegistrations().then(function(r){" +
-                "r.forEach(function(x){x.unregister()})});if(window.caches)caches.keys().then(function(k){" +
-                "k.forEach(function(n){caches.delete(n)})});return true})()",
-        )
-        SystemClock.sleep(1500L)
-        network(false)
-        val a = activity()
-        val url = BuildConfig.CANASTA_BASE_URL.trimEnd('/') + "/?sin-red=" + SystemClock.elapsedRealtime()
-        instr.runOnMainSync { a?.findViewById<WebView>(R.id.web)?.loadUrl(url) }
-        val retry = device.wait(Until.findObject(By.text(ctx.getString(R.string.retry))), WAIT)
-        assertNotNull("без сети нет экрана с «Reintentar» (${appState()})", retry)
-        assertTrue("без сети нет заголовка «${ctx.getString(R.string.error_title)}»", device.hasObject(By.text(ctx.getString(R.string.error_title))))
-        shot("04-offline")
-        network(true)
-        device.findObject(By.text(ctx.getString(R.string.retry)))?.click()
-        waitJs(SITE_READY, "«Reintentar» не открыл сайт после возврата сети")
-        assertTrue("экран «нет сети» не ушёл", device.wait(Until.gone(By.text(ctx.getString(R.string.retry))), 5_000L) == true)
-        shot("04-online")
     }
 
     /** 5. «Потянуть вниз» сверху страницы — страница загружается заново (метка в window пропадает). */

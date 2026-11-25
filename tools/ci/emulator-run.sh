@@ -91,7 +91,9 @@ else
 fi
 
 # Дизайн: снимки и замер экранов по правилам design/specs — для дизайнера, прогон не роняет (tools/ci/design)
-if [ -n "${CC_WEB:-}" ]; then
+if [ -n "${CC_WEB:-}" ] && [ "${WV_MAJOR:-0}" -lt 80 ]; then
+  echo "== Дизайн: пропуск — WebView ${WV_MAJOR:-?}, сайт на нём не работает"
+elif [ -n "${CC_WEB:-}" ]; then
   echo "== Дизайн: снимки и замер экранов"
   (cd "$CC_WEB" && npm i --no-save --no-audit --no-fund playwright >/dev/null 2>&1) || echo "::warning::npm i playwright не прошёл"
   node "$(dirname "$0")/design/shots.js" || true
