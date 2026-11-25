@@ -84,8 +84,9 @@ jobs:
       matrix:
         include:
           # Экран 1080 × 2400 (pixel_6): плотность 480 — 360 × 800 dp, 420 — 412 × 915 dp
-          - { name: "Android 10, 360 dp", api: 29, density: 480, slug: android10-360 }
-          - { name: "Android 14, 412 dp", api: 34, density: 420, slug: android14-412 }
+          # gpu: на Android 14 карта сайта (WebGL) под swiftshader роняла эмулятор целиком — там swangle (ANGLE + SwiftShader)
+          - { name: "Android 10, 360 dp", api: 29, density: 480, slug: android10-360, gpu: swiftshader_indirect }
+          - { name: "Android 14, 412 dp", api: 34, density: 420, slug: android14-412, gpu: swangle_indirect }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -126,7 +127,7 @@ jobs:
           cores: 3
           ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash tools/ci/emulator-run.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -221,7 +222,7 @@ jobs:
           cores: 3
           ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -timezone America/Argentina/Buenos_Aires
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -timezone America/Argentina/Buenos_Aires
           script: bash tools/ci/qa/in-app.sh
       - uses: actions/upload-artifact@v4
         if: always()
