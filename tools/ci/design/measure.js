@@ -73,7 +73,8 @@ module.exports = function measure() {
     if (!visible(el) || el.closest('[aria-hidden="true"], [inert]')) continue;
     const r = el.getBoundingClientRect();
     const top = r.top + (fixedOf(el) ? 0 : sy);
-    if (top > LIM || r.right <= 0 || r.left >= W) continue;
+    // За краем экрана (ссылка «Ir al contenido» прячется выше верха, пока на неё не перейдут с клавиатуры) — не в счёт
+    if (top > LIM || r.right <= 0 || r.left >= W || r.bottom + sy <= 0) continue;
     const cs = getComputedStyle(el);
     if (el.tagName === 'A' && cs.display === 'inline' && el.parentElement && el.parentElement.innerText.trim().length > el.innerText.trim().length + 3) continue;
     targets++;

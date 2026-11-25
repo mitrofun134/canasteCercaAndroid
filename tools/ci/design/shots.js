@@ -67,16 +67,22 @@ async function main() {
   await sh(`am force-stop ${PKG}`);
   await sh(`pm clear ${PKG}`);
   for (const p of ['CAMERA', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION']) await sh(`pm grant ${PKG} android.permission.${p}`).catch(() => {});
-  await sh(`am start -W -n ${PKG}/.MainActivity`);
-  const wv = await device.webView({ pkg: PKG }, { timeout: 30000 });
-  const page = await wv.page();
-  await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
+  // Страница WebView приложения; если она закрылась (экран пересоздан) — берём новую, состояние сайта в localStorage уже есть
+  let page = null;
+  const openApp = async () => {
+    await sh(`am start -W -n ${PKG}/.MainActivity`);
+    const wv = await device.webView({ pkg: PKG }, { timeout: 30000 });
+    page = await wv.page();
+    await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
+  };
+  await openApp();
   await page.evaluate(([k, v]) => localStorage.setItem(k, v), [STORAGE_KEY, JSON.stringify(state)]);
 
   const results = [];
   for (const s of SCREENS) {
     const res = { ...s, shots: [], error: null };
     try {
+      if (page.isClosed()) await openApp();
       await page.goto(APP_BASE + s.path, { waitUntil: 'load', timeout: 30000 });
       if (s.calc) {
         const btn = page.locator('#calc-btn');

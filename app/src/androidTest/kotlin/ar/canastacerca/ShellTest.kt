@@ -60,6 +60,7 @@ class ShellTest {
 
     @After
     fun restore() {
+        if (Build.VERSION.SDK_INT >= 30) device.executeShellCommand("cmd connectivity airplane-mode disable")
         device.executeShellCommand("svc wifi enable")
         device.executeShellCommand("svc data enable")
         device.executeShellCommand("settings put system font_scale 1.0")
@@ -329,11 +330,19 @@ class ShellTest {
     private fun webViewMajor(): Int =
         WebViewCompat.getCurrentWebViewPackage(ctx)?.versionName?.substringBefore('.')?.toIntOrNull() ?: 0
 
-    /** Сеть эмулятора: wifi и мобильные данные. Ждём, пока сервер сайта станет (не)доступен из приложения. */
+    /**
+     * Сеть эмулятора. Android 11+ — режим полёта: так система говорит «сети нет», и WebView сразу отдаёт ошибку
+     * (на Android 14 после svc wifi/data соединения к 10.0.2.2 висят, а не падают). Android 10 — svc wifi и data.
+     * Ждём, пока сервер сайта станет (не)доступен из приложения.
+     */
     private fun network(on: Boolean) {
         val v = if (on) "enable" else "disable"
-        device.executeShellCommand("svc wifi $v")
-        device.executeShellCommand("svc data $v")
+        if (Build.VERSION.SDK_INT >= 30) {
+            device.executeShellCommand("cmd connectivity airplane-mode ${if (on) "disable" else "enable"}")
+        } else {
+            device.executeShellCommand("svc wifi $v")
+            device.executeShellCommand("svc data $v")
+        }
         val until = SystemClock.elapsedRealtime() + WAIT
         while (SystemClock.elapsedRealtime() < until) {
             if (serverUp() == on) return

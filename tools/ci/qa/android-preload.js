@@ -29,12 +29,35 @@ if (WEB && process.env.QA_ANDROID === '1') {
     return { base: BASE, port: Number(new URL(BASE).port) || 80, log: () => '', dataDir: os.tmpdir(), stop: async () => {} };
   };
 
+  // Одно подключение к эмулятору на процесс: в одном файле тестов несколько describe со своими launch/close —
+  // закрываем, когда закрыли все (иначе «Device is closed» у следующего)
+  let shared = null;
+  let users = 0;
   browser.launch = async () => {
     const pw = browser.playwright;
     if (!pw || !pw._android) throw new Error('QA_ANDROID: нет Playwright для Android (npm i --no-save playwright)');
-    const [device] = await pw._android.devices();
-    if (!device) throw new Error('QA_ANDROID: adb не видит эмулятор');
-    return { qaAndroid: device, close: async () => device.close(), newContext: () => { throw new Error('QA_ANDROID: в приложении один WebView — newContext нельзя'); } };
+    if (!shared) {
+      const [device] = await pw._android.devices();
+      if (!device) throw new Error('QA_ANDROID: adb не видит эмулятор');
+      shared = device;
+    }
+    users++;
+    const device = shared;
+    let closed = false;
+    return {
+      qaAndroid: device,
+      close: async () => {
+        if (closed) return;
+        closed = true;
+        if (--users === 0 && shared === device) {
+          shared = null;
+          await device.close().catch(() => {});
+        }
+      },
+      newContext: () => {
+        throw new Error('QA_ANDROID: в приложении один WebView — newContext нельзя');
+      },
+    };
   };
 
   const original = browser.openPage;

@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
+import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.PixelCopy
@@ -722,6 +723,12 @@ class MainActivity : ComponentActivity() {
                         hangReported = true
                         reportNonFatal(IllegalStateException("WebView: сайт не отвечает 5 с ($path, на экране: $shown)"))
                     }
+                    Log.w(TAG, "сайт не отвечает 5 с: $path")
+                    return
+                }
+                // Отладочная сборка (эмулятор в CI, медленный) — только запись: перезапуск ломал бы автотесты
+                if (BuildConfig.DEBUG) {
+                    Log.w(TAG, "сайт не отвечает ${(now - unresponsiveSince) / 1000 + 5} с: $path")
                     return
                 }
                 if (webGone || !shown || renderer == null) return
@@ -1045,6 +1052,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        const val TAG = "Canasta"
         const val PREFS = "canasta"
         const val KEY_SERVER = "server_link"
         const val KEY_SERVER_BUILD = "server_link_build"
