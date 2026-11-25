@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import android.view.View
 import android.webkit.WebView
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
@@ -67,15 +68,22 @@ class ShellTest {
     /** 1. Запуск — сайт. Первый раз «Ofertas» из меню — лист «¿Con qué pagás?», «Saltar» его закрывает. */
     @Test
     fun t01_launchAndSkip() {
-        launch(fresh = true)
         val wv = WebViewCompat.getCurrentWebViewPackage(ctx)
-        Log.i(TAG, "API ${Build.VERSION.SDK_INT}, WebView ${wv?.packageName} ${wv?.versionName}, страница ${js("innerWidth")} px")
+        Log.i(TAG, "API ${Build.VERSION.SDK_INT}, WebView ${wv?.packageName} ${wv?.versionName}")
+        // Скрипты сайта (app.js: «??», «?.») — от Chrome 80. Стоковый WebView образа Android 10 — 74: сайт не работает
+        assumeTrue("WebView ${wv?.versionName}: сайту нужен 80+", webViewMajor() >= 80)
+        launch(fresh = true)
         shot("01-start")
         js("navigate('/recetas');setTimeout(function(){navigate('/')},400);true")
-        val skip = device.wait(Until.findObject(By.text("Saltar")), WAIT)
-        assertNotNull("нет листа «¿Con qué pagás?» с кнопкой «Saltar» (${siteState()})", skip)
+        waitJs(
+            "!!document.querySelector('#dlg-pay-onb[open]')&&!!document.querySelector('#pay-onb-skip')&&" +
+                "document.querySelector('#pay-onb-skip').getBoundingClientRect().height>0",
+            "нет листа «¿Con qué pagás?» с кнопкой «Saltar» (${siteState()})",
+        )
+        SystemClock.sleep(600L) // лист выезжает
         shot("01-pay-sheet")
-        skip!!.click()
+        assertEquals("на кнопке не «Saltar»", "\"Saltar\"", js("document.querySelector('#pay-onb-skip').textContent.trim()"))
+        tapSite("#pay-onb-skip")
         waitJs("!document.querySelector('dialog[open]')", "«Saltar» не закрыл лист")
         shot("01-after-skip")
     }
@@ -122,9 +130,10 @@ class ShellTest {
         SystemClock.sleep(1500L)
         network(false)
         val a = activity()
-        instr.runOnMainSync { a?.findViewById<WebView>(R.id.web)?.reload() }
+        val url = BuildConfig.CANASTA_BASE_URL.trimEnd('/') + "/?sin-red=" + SystemClock.elapsedRealtime()
+        instr.runOnMainSync { a?.findViewById<WebView>(R.id.web)?.loadUrl(url) }
         val retry = device.wait(Until.findObject(By.text(ctx.getString(R.string.retry))), WAIT)
-        assertNotNull("без сети нет экрана с «Reintentar»", retry)
+        assertNotNull("без сети нет экрана с «Reintentar» (${appState()})", retry)
         assertTrue("без сети нет заголовка «${ctx.getString(R.string.error_title)}»", device.hasObject(By.text(ctx.getString(R.string.error_title))))
         shot("04-offline")
         network(true)
@@ -207,6 +216,7 @@ class ShellTest {
         ctx.startActivity(start)
         val a = waitActivity { it !== old }
         waitJs(SITE_READY, "сайт не открылся")
+        waitNoOverlay()
         if (fresh) {
             js("window.__ccOld=1;localStorage.clear();sessionStorage.clear();location.reload();true")
             waitJs("typeof window.__ccOld==='undefined'&&$SITE_READY", "сайт не открылся заново с пустым localStorage")
@@ -272,8 +282,53 @@ class ShellTest {
             if (js(script, 5_000L) == "true") return
             SystemClock.sleep(250L)
         }
-        fail("$what (ждали ${timeoutMs / 1000} с)")
+        fail("$what (ждали ${timeoutMs / 1000} с; ${appState()})")
     }
+
+    /** Что на экране приложения поверх сайта — для сообщения об ошибке. */
+    private fun appState(): String {
+        val a = activity() ?: return "экрана приложения нет, на экране ${device.currentPackageName}"
+        val on = mutableListOf<String>()
+        instr.runOnMainSync {
+            for ((id, name) in listOf(R.id.loading to "Firu-заставка", R.id.freeze to "снимок страницы", R.id.error to "экран ошибки", R.id.update to "«Actualizá la app»")) {
+                if (a.findViewById<View>(id)?.visibility == View.VISIBLE) on += name
+            }
+        }
+        return "поверх сайта: ${on.joinToString().ifEmpty { "ничего" }}, адрес ${js("location.pathname", 3_000L)}"
+    }
+
+    /** Пока поверх сайта заставка или снимок — касания до сайта не доходят: ждём. */
+    private fun waitNoOverlay() {
+        val until = SystemClock.elapsedRealtime() + WAIT
+        while (SystemClock.elapsedRealtime() < until) {
+            val a = activity()
+            var busy = true
+            instr.runOnMainSync {
+                busy = a == null || listOf(R.id.loading, R.id.freeze).any { a.findViewById<View>(it)?.visibility == View.VISIBLE }
+            }
+            if (!busy) return
+            SystemClock.sleep(200L)
+        }
+        fail("заставка или снимок не ушли (${appState()})")
+    }
+
+    /** Настоящее касание по элементу сайта: середина его прямоугольника в координатах экрана. */
+    private fun tapSite(selector: String) {
+        val raw = js("(function(){var r=document.querySelector(${JSONObject.quote(selector)}).getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()")
+        val xy = JSONArray(raw ?: "[]")
+        assertTrue("нет элемента $selector", xy.length() == 2)
+        val a = activity()!!
+        val at = IntArray(2)
+        var density = 1f
+        instr.runOnMainSync {
+            a.findViewById<WebView>(R.id.web).getLocationOnScreen(at)
+            density = a.resources.displayMetrics.density
+        }
+        device.click((at[0] + xy.getDouble(0) * density).toInt(), (at[1] + xy.getDouble(1) * density).toInt())
+    }
+
+    private fun webViewMajor(): Int =
+        WebViewCompat.getCurrentWebViewPackage(ctx)?.versionName?.substringBefore('.')?.toIntOrNull() ?: 0
 
     /** Сеть эмулятора: wifi и мобильные данные. Ждём, пока сервер сайта станет (не)доступен из приложения. */
     private fun network(on: Boolean) {

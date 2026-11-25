@@ -39,6 +39,10 @@ adb shell settings put system font_scale 1.0
 } | tee "$OUT/device.txt"
 # Версия Android и WebView — отметкой на странице прогона (видно без входа в GitHub)
 WV=$(adb shell dumpsys webviewupdate 2>/dev/null | tr -d '\r' | grep -m1 -i "current webview package" | sed 's/.*: *//')
+WV_MAJOR=$(echo "$WV" | sed -n 's/.*, *\([0-9]*\)\..*/\1/p')
+if [ -n "$WV_MAJOR" ] && [ "$WV_MAJOR" -lt 80 ]; then
+  echo "::warning title=$(prop "${CC_NAME:-Эмулятор}") · старый WebView::WebView $WV_MAJOR: скрипты сайта (app.js — «??» и «?.») работают с Chrome 80 — сайт тут не запускается; проверки, которым нужен сайт целиком, пропускаются"
+fi
 echo "::notice title=$(prop "${CC_NAME:-Эмулятор}")::Android $(adb shell getprop ro.build.version.release | tr -d '\r') (API $(adb shell getprop ro.build.version.sdk | tr -d '\r')), WebView ${WV:-?}"
 
 # logcat — весь прогон; видео — кусками по 170 с (screenrecord пишет не больше 3 минут за раз)
@@ -84,6 +88,13 @@ if [ "$fail" = 0 ]; then
   fi
 else
   gherr "${CC_NAME:-Эмулятор} · приложение не установилось" "adb install — см. лог шага"
+fi
+
+# Дизайн: снимки и замер экранов по правилам design/specs — для дизайнера, прогон не роняет (tools/ci/design)
+if [ -n "${CC_WEB:-}" ]; then
+  echo "== Дизайн: снимки и замер экранов"
+  (cd "$CC_WEB" && npm i --no-save --no-audit --no-fund playwright >/dev/null 2>&1) || echo "::warning::npm i playwright не прошёл"
+  node "$(dirname "$0")/design/shots.js" || true
 fi
 
 if [ -d "${CC_WEB:-}/qa/android" ] && ls "$CC_WEB"/qa/android/*.test.js >/dev/null 2>&1; then

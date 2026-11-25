@@ -42,7 +42,17 @@ if (WEB && process.env.QA_ANDROID === '1') {
     const d = b && b.qaAndroid;
     if (!d) return original(b, base, { device, state, onboard });
     if (!onboard) state = { onboardPay: 'done', ...(state || {}) };
-    const sh = async (cmd) => (await d.shell(cmd)).toString().trim();
+    // adb изредка отвечает FAIL сразу после pm clear — повторяем
+    const sh = async (cmd) => {
+      for (let i = 0; ; i++) {
+        try {
+          return (await d.shell(cmd)).toString().trim();
+        } catch (e) {
+          if (i >= 3) throw e;
+          await new Promise((ok) => setTimeout(ok, 700));
+        }
+      }
+    };
     await sh(`am force-stop ${PKG}`);
     await sh(`pm clear ${PKG}`);
     for (const p of PERMS) await sh(`pm grant ${PKG} ${p}`).catch(() => {});
