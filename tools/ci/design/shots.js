@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const WEB = process.env.CC_WEB;
-const OUT = path.join(process.env.CC_OUT || 'ci-out', 'design');
+const OUT = process.env.CC_DESIGN_DIR || path.join(process.env.CC_OUT || 'ci-out', 'design');
 const NAME = process.env.CC_NAME || 'эмулятор';
 const PKG = process.env.QA_ANDROID_PKG || 'ar.canastacerca';
 const APP_BASE = 'http://10.0.2.2:3000'; // так сервер видит приложение (debug-сборка)
